@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { format, isValid, parseISO, addWeeks, differenceInWeeks } from 'date-fns';
+import { format, isValid, parseISO, addWeeks, differenceInWeeks, differenceInCalendarDays, addDays } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { Bird, RefreshCw, ArrowRightCircle, LogOut, Edit3, X } from 'lucide-react';
 import { Flock, INITIAL_COOPS } from '@/lib/utils';
@@ -16,21 +16,43 @@ const formatDateForInput = (date: Date | undefined) => {
   return format(date, 'yyyy-MM-dd');
 };
 
+// Dropdown içinde tarih göstermek için kısa format (örn: 12 Kas 2025)
 const formatDateShort = (date: Date) => {
   return format(date, 'd MMM yyyy', { locale: tr });
 };
 
 export function SidebarRight({ selectedFlock, onUpdateFlock }: SidebarRightProps) {
   
+  // 1. Akıllı Tarih Değiştirici (Civciv Giriş Tarihi için)
+  // Giriş tarihi değiştiğinde, eğer diğer tarihler (Transfer, Molt, Exit) ayarlanmışsa
+  // onları da aynı gün farkı kadar kaydırır (böylece 16. haftadaysa yine 16. haftada kalır).
   const handleHatchDateChange = (valueStr: string) => {
     if (!selectedFlock) return;
-    const newDate = parseISO(valueStr);
-    if (isValid(newDate)) {
-       onUpdateFlock({ ...selectedFlock, hatchDate: newDate });
+    
+    const newHatchDate = parseISO(valueStr);
+    
+    if (isValid(newHatchDate)) {
+       // Eğer eski bir tarih varsa, aradaki gün farkını hesapla
+       if (selectedFlock.hatchDate) {
+           const diff = differenceInCalendarDays(newHatchDate, selectedFlock.hatchDate);
+           
+           const updatedFlock = {
+               ...selectedFlock,
+               hatchDate: newHatchDate,
+               // Varsa diğer tarihleri de aynı gün farkı kadar ötele
+               transferDate: selectedFlock.transferDate ? addDays(selectedFlock.transferDate, diff) : undefined,
+               moltDate: selectedFlock.moltDate ? addDays(selectedFlock.moltDate, diff) : undefined,
+               exitDate: selectedFlock.exitDate ? addDays(selectedFlock.exitDate, diff) : undefined,
+           };
+           onUpdateFlock(updatedFlock);
+       } else {
+           // İlk kez tarih giriliyorsa (eski tarih yoksa) sadece giriş tarihini güncelle
+           onUpdateFlock({ ...selectedFlock, hatchDate: newHatchDate });
+       }
     }
   };
 
-  // --- DÜZELTME 1: SEÇİM MANTIĞI ---
+  // 2. Hafta Bazlı Değiştirici (Transfer, Molt, Exit için)
   const handleWeekSelect = (key: keyof Flock, weekStr: string) => {
     if (!selectedFlock || !selectedFlock.hatchDate) return;
 
@@ -40,33 +62,19 @@ export function SidebarRight({ selectedFlock, onUpdateFlock }: SidebarRightProps
     }
 
     const week = parseInt(weekStr, 10);
-    
-    // Transfer ve Molting, haftanın "BAŞLANGICINDA" olur.
-    // Örn: 16. Hafta transferi için 15 tam hafta geçmesi gerekir. (week - 1)
-    // Çıkış (Exit) ise bir "BİTİŞ" olayıdır. 90. hafta çıkışı için 90 hafta dolmalıdır.
-    let weeksToAdd = week;
-    if (key === 'transferDate' || key === 'moltDate') {
-        weeksToAdd = week - 1;
-    }
-
-    const targetDate = addWeeks(selectedFlock.hatchDate, weeksToAdd);
+    // Kuluçka tarihine seçilen haftayı ekle
+    const targetDate = addWeeks(selectedFlock.hatchDate, week);
     onUpdateFlock({ ...selectedFlock, [key]: targetDate });
   };
 
-  // --- DÜZELTME 2: GÖRÜNTÜLEME MANTIĞI ---
-  const getCurrentWeekValue = (key: keyof Flock, targetDate: Date | undefined) => {
+  // Mevcut tarihin kaçıncı haftaya denk geldiğini bulur (Select value için)
+  const getCurrentWeekValue = (targetDate: Date | undefined) => {
     if (!targetDate || !selectedFlock?.hatchDate) return "";
-    let diff = differenceInWeeks(targetDate, selectedFlock.hatchDate);
-    
-    // Transfer/Molt için veritabanında "Hafta Başı" (örn: 15) kayıtlı.
-    // Ama kullanıcıya "16. Hafta" demeliyiz. O yüzden +1 ekliyoruz.
-    if (key === 'transferDate' || key === 'moltDate') {
-        diff += 1;
-    }
-    
+    const diff = differenceInWeeks(targetDate, selectedFlock.hatchDate);
     return diff.toString();
   };
 
+  // Çıkış haftası aralığını belirle (Dinamik)
   const getExitWeekRange = () => {
     if (selectedFlock?.isMolting) {
         return { start: 112, end: 130 };
@@ -82,7 +90,7 @@ export function SidebarRight({ selectedFlock, onUpdateFlock }: SidebarRightProps
       {/* HEADER */}
       <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
          <Bird size={24} className="text-amber-500" />
-         <h2 className="font-bold text-slate-800 text-xl">SidebarRight</h2>
+         <h2 className="font-bold text-slate-800 text-xl">Sürü Yönetimi</h2>
       </div>
 
       {selectedFlock ? (
@@ -103,7 +111,7 @@ export function SidebarRight({ selectedFlock, onUpdateFlock }: SidebarRightProps
                </div>
             </div>
 
-            {/* 2. CİVCİV GİRİŞ */}
+            {/* 2. CİVCİV GİRİŞ (ZORUNLU - TAKVİM SEÇİMİ) */}
             <div className="space-y-1">
                 <label className="text-[11px] font-bold text-slate-500 uppercase flex items-center gap-1.5">
                   <Edit3 size={12} /> Civciv Giriş Tarihi
@@ -118,23 +126,21 @@ export function SidebarRight({ selectedFlock, onUpdateFlock }: SidebarRightProps
 
             <hr className="border-slate-100" />
 
-            {/* 3. TRANSFER */}
+            {/* 3. TRANSFER (HAFTA LİSTESİ: 10-20) */}
             <div className="space-y-1">
                 <label className="text-[11px] font-bold text-blue-600 uppercase flex items-center gap-1.5">
                   <ArrowRightCircle size={12} /> Transfer Haftası
                 </label>
                 <div className="relative">
                     <select 
-                        value={getCurrentWeekValue('transferDate', selectedFlock.transferDate)}
+                        value={getCurrentWeekValue(selectedFlock.transferDate)}
                         onChange={(e) => handleWeekSelect('transferDate', e.target.value)}
                         className="w-full bg-blue-50/50 border border-blue-200 text-blue-900 text-sm rounded-lg p-2.5 pr-8 focus:ring-2 focus:ring-blue-500 outline-none font-mono appearance-none cursor-pointer hover:bg-white transition-colors"
                     >
                         <option value="">Otomatik (16. Hafta)</option>
                         {Array.from({ length: 11 }, (_, i) => i + 10).map(week => (
-                            // DÜZELTME 3: Listede tarih gösterirken de (week - 1) kullanıyoruz ki
-                            // kullanıcı o haftanın BAŞLANGIÇ tarihini görsün.
                             <option key={week} value={week}>
-                                {week}. Hafta - {formatDateShort(addWeeks(selectedFlock.hatchDate, week - 1))}
+                                {week}. Hafta - {formatDateShort(addWeeks(selectedFlock.hatchDate, week))}
                             </option>
                         ))}
                     </select>
@@ -148,13 +154,14 @@ export function SidebarRight({ selectedFlock, onUpdateFlock }: SidebarRightProps
                             <X size={14} />
                         </button>
                     )}
+                    {/* Custom Arrow Icon for Select */}
                     <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-blue-400">
                         <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     </div>
                 </div>
             </div>
 
-            {/* 4. MOLTING AYARLARI */}
+            {/* 4. MOLTING AYARLARI (Yukarı Taşındı) */}
             <div className={`p-4 rounded-xl border transition-all duration-300 ${selectedFlock.isMolting ? 'bg-emerald-50 border-emerald-200 shadow-sm' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
                <label className="flex items-center justify-between cursor-pointer mb-3">
                   <span className={`text-xs font-bold uppercase flex items-center gap-2 ${selectedFlock.isMolting ? 'text-emerald-700' : 'text-slate-500'}`}>
@@ -172,6 +179,7 @@ export function SidebarRight({ selectedFlock, onUpdateFlock }: SidebarRightProps
                   </div>
                </label>
 
+               {/* Molting Tarihi (HAFTA LİSTESİ: 70-95) */}
                {selectedFlock.isMolting && (
                    <div className="animate-in fade-in slide-in-from-top-2 duration-300 relative">
                         <label className="text-[10px] font-bold text-emerald-600 uppercase mb-1 block">
@@ -179,14 +187,14 @@ export function SidebarRight({ selectedFlock, onUpdateFlock }: SidebarRightProps
                         </label>
                         <div className="relative">
                             <select 
-                                value={getCurrentWeekValue('moltDate', selectedFlock.moltDate)}
+                                value={getCurrentWeekValue(selectedFlock.moltDate)}
                                 onChange={(e) => handleWeekSelect('moltDate', e.target.value)}
                                 className="w-full bg-white border border-emerald-300 text-emerald-900 text-sm rounded-lg p-2.5 pr-8 focus:ring-2 focus:ring-emerald-500 outline-none font-mono appearance-none cursor-pointer hover:bg-emerald-50/50 transition-colors"
                             >
                                 <option value="">Seçiniz...</option>
                                 {Array.from({ length: 26 }, (_, i) => i + 70).map(week => (
                                     <option key={week} value={week}>
-                                        {week}. Hafta - {formatDateShort(addWeeks(selectedFlock.hatchDate, week - 1))}
+                                        {week}. Hafta - {formatDateShort(addWeeks(selectedFlock.hatchDate, week))}
                                     </option>
                                 ))}
                             </select>
@@ -214,21 +222,20 @@ export function SidebarRight({ selectedFlock, onUpdateFlock }: SidebarRightProps
                )}
             </div>
 
-            {/* 5. ÇIKIŞ / KESİM */}
+            {/* 5. ÇIKIŞ / KESİM (Aşağı Taşındı - DİNAMİK LİSTE) */}
             <div className="space-y-1">
                 <label className="text-[11px] font-bold text-red-600 uppercase flex items-center gap-1.5">
                   <LogOut size={12} /> Çıkış Haftası (Kesim)
                 </label>
                 <div className="relative">
                     <select 
-                        value={getCurrentWeekValue('exitDate', selectedFlock.exitDate)}
+                        value={getCurrentWeekValue(selectedFlock.exitDate)}
                         onChange={(e) => handleWeekSelect('exitDate', e.target.value)}
                         className="w-full bg-red-50/50 border border-red-200 text-red-900 text-sm rounded-lg p-2.5 pr-8 focus:ring-2 focus:ring-red-500 outline-none font-mono appearance-none cursor-pointer hover:bg-white transition-colors"
                     >
                         <option value="">Otomatik ({selectedFlock.isMolting ? '125' : '90'}. Hafta)</option>
                         {Array.from({ length: exitWeekCount }, (_, i) => i + exitRange.start).map(week => (
                             <option key={week} value={week}>
-                                {/* Çıkış tarihi bir Bitiş olduğu için week-1 yapmıyoruz, tam hafta sayısını ekliyoruz */}
                                 {week}. Hafta - {formatDateShort(addWeeks(selectedFlock.hatchDate, week))}
                             </option>
                         ))}
