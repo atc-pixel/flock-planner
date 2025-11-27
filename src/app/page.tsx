@@ -4,56 +4,75 @@ import React, { useState, useEffect, useRef } from 'react';
 import { addWeeks, differenceInWeeks } from 'date-fns';
 import { DndContext, DragEndEvent, DragOverlay } from '@dnd-kit/core';
 
-// Kendi oluşturduğumuz kütüphaneler
-import { Flock, INITIAL_COOPS, RULES } from '@/lib/utils';
+// calculateTimeline import edildi
+import { Flock, INITIAL_COOPS, RULES, calculateTimeline } from '@/lib/utils';
 import { Header } from '@/components/Header';
 import { DateSidebar } from '@/components/DateSidebar';
 import { CoopColumn } from '@/components/CoopColumn';
 import { SidebarRight } from '@/components/SidebarRight';
 
 export default function FlockPlanner() {
-  // --- STATE ---
   const [flocks, setFlocks] = useState<Flock[]>([]);
   const [selectedFlockId, setSelectedFlockId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   
-  // Scroll Alanı Referansı (Otomatik kaydırma için)
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // --- TAKVİM AYARLARI ---
-  // 1 Ocak 2024'ten başlatıyoruz (Sabit Çapa)
-  const timelineStart = new Date(2024, 0, 1); // Ay 0-indexlidir (0 = Ocak)
-  const totalViewWeeks = 156; // 3 Yıl (2024, 2025, 2026)
+  const timelineStart = new Date(2024, 0, 1); 
+  const totalViewWeeks = 156; 
   const totalHeight = totalViewWeeks * RULES.pixelsPerWeek;
 
-  // Bugünün konumu (Kırmızı Çizgi ve Scroll için)
   const weeksUntilToday = differenceInWeeks(new Date(), timelineStart);
   const todayTopPos = weeksUntilToday * RULES.pixelsPerWeek;
 
-  // --- EFFEECT: SAYFA AÇILINCA BUGÜNE GİT ---
   useEffect(() => {
     if (scrollContainerRef.current) {
-      // Bugüne git ama biraz yukarıda boşluk bırak (örn: 100px) ki bağlam görünsün
       const scrollPos = Math.max(0, todayTopPos - 150);
       scrollContainerRef.current.scrollTop = scrollPos;
     }
-  }, [todayTopPos]); // todayTopPos değişirse tekrar çalışır (zaten sabit)
+  }, [todayTopPos]);
 
-
-  // --- ACTIONS ---
+  // --- AUTO LANE MANTIĞI ---
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveId(null);
     const { over, active } = event;
 
     if (over && active.id === 'new-flock-source') {
       const coopId = over.id as string;
+      
+      // Yeni Sürünün Tahmini Tarihleri
+      const newHatchDate = addWeeks(new Date(), -10); // Varsayılan başlangıç
+      // Standart çıkış + sanitasyon süresini baz alarak bir bitiş hesaplayalım
+      const standardDuration = RULES.stdExitWeek + (RULES.sanitationWeeks || 3);
+      const newEndDate = addWeeks(newHatchDate, standardDuration);
+
+      // Bu kümesteki mevcut sürüleri bul
+      const existingFlocksInCoop = flocks.filter(f => f.coopId === coopId);
+
+      // Sol Şeritte (Lane 0) çakışma var mı kontrol et
+      const isLane0Busy = existingFlocksInCoop.some(existingFlock => {
+          if (existingFlock.lane !== 0) return false; // Sadece sol şeride bakıyoruz
+
+          const existingTl = calculateTimeline(existingFlock);
+          if (!existingTl) return false;
+
+          // Çakışma Kontrolü (Overlap Logic):
+          // (StartA < EndB) && (EndA > StartB)
+          const overlap = (newHatchDate < existingTl.sanitationEnd) && (newEndDate > existingFlock.hatchDate);
+          return overlap;
+      });
+
+      // Eğer Lane 0 doluysa 1 yap, boşsa 0 yap.
+      const assignedLane = isLane0Busy ? 1 : 0;
+
       const newFlock: Flock = {
         id: Math.random().toString().substring(2, 6),
         coopId: coopId,
-        // Varsayılan olarak bugüne yakın bir tarihe ekle
-        hatchDate: addWeeks(new Date(), -10), 
+        hatchDate: newHatchDate, 
         isMolting: false,
+        lane: assignedLane as 0 | 1, // Otomatik atanan şerit
       };
+
       setFlocks([...flocks, newFlock]);
       setSelectedFlockId(newFlock.id);
     }
@@ -74,27 +93,17 @@ export default function FlockPlanner() {
   return (
     <DndContext onDragStart={(e) => setActiveId(e.active.id as string)} onDragEnd={handleDragEnd}>
       <div className="h-screen flex flex-col bg-slate-50 font-sans overflow-hidden">
-        
-        {/* 1. ÜST MENÜ */}
         <Header />
-
-        {/* 2. ANA İÇERİK ALANI */}
         <div className="flex grow overflow-hidden">
-          
-          {/* SCROLL ALANI (Tarih + Kümesler) */}
           <div 
             ref={scrollContainerRef}
             className="grow overflow-y-auto relative flex scroll-smooth" 
             style={{ height: 'calc(100vh - 64px)' }}
           >
-            
-            {/* A. TARİH SÜTUNU */}
             <DateSidebar timelineStart={timelineStart} totalWeeks={totalViewWeeks} />
-
-            {/* B. KÜMES SÜTUNLARI */}
-            <div className="flex grow relative">
+            <div className="flex grow relative" style={{ minHeight: `${totalHeight}px` }}>
               
-              {/* Bugün Çizgisi (Kırmızı) */}
+              {/* Bugün Çizgisi */}
               {weeksUntilToday >= 0 && weeksUntilToday < totalViewWeeks && (
                 <div 
                    className="absolute left-0 right-0 border-t-2 border-red-500 z-20 pointer-events-none opacity-80"
@@ -119,16 +128,11 @@ export default function FlockPlanner() {
               ))}
             </div>
           </div>
-
-          {/* 3. SAĞ PANEL (DETAY) */}
           <SidebarRight 
             selectedFlock={selectedFlock}
             onUpdateFlock={updateFlock}
           />
-
         </div>
-
-        {/* DRAG OVERLAY */}
         <DragOverlay>
             {activeId === 'new-flock-source' ? (
                 <div className="bg-amber-500 text-white px-3 py-2 rounded shadow-xl font-bold opacity-90 cursor-grabbing">
@@ -136,7 +140,6 @@ export default function FlockPlanner() {
                 </div>
             ) : null}
         </DragOverlay>
-
       </div>
     </DndContext>
   );

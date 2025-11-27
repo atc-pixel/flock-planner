@@ -7,7 +7,8 @@ export type Flock = {
   id: string; 
   coopId: string; 
   hatchDate: Date; 
-  isMolting: boolean; 
+  isMolting: boolean;
+  lane: 0 | 1; // YENİ EKLENDİ: 0 = Sol, 1 = Sağ
 };
 
 // --- SABİTLER ---
@@ -23,12 +24,11 @@ export const RULES = {
   stdExitWeek: 80,
   moltingExitWeek: 120,
   sanitationWeeks: 3,
-  pixelsPerWeek: 24, // GÜNCELLENDİ: Daha ince satırlar (Eskisi 40)
+  pixelsPerWeek: 24,
 };
 
 // --- HESAPLAMA ---
 export const calculateTimeline = (flock: Flock) => {
-  // Tarihlerin geçerli olup olmadığını kontrol edelim
   if (!flock.hatchDate) return null;
 
   const transfer = addWeeks(flock.hatchDate, RULES.transferWeek);
@@ -37,7 +37,6 @@ export const calculateTimeline = (flock: Flock) => {
   const exitWeek = flock.isMolting ? RULES.moltingExitWeek : RULES.stdExitWeek;
   const exit = addWeeks(flock.hatchDate, exitWeek);
   
-  // Eğer RULES.sanitationWeeks undefined ise burası patlar, varsayılan 3 verelim
   const sanWeeks = RULES.sanitationWeeks || 3; 
   const sanitationEnd = addWeeks(exit, sanWeeks);
   

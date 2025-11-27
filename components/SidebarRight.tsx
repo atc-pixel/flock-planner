@@ -3,7 +3,8 @@
 import React from 'react';
 import { format, isValid, parseISO } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import { Bird, TrendingUp, Calendar, Scissors, Droplets, Edit3 } from 'lucide-react';
+// Columns ikonu eklendi
+import { Bird, TrendingUp, Calendar, Scissors, Droplets, Edit3, Columns } from 'lucide-react';
 import { Flock, calculateTimeline, INITIAL_COOPS } from '@/lib/utils';
 
 interface SidebarRightProps {
@@ -16,7 +17,6 @@ const safeFormat = (date: Date | undefined, fmt: string) => {
   return format(date, fmt, { locale: tr });
 };
 
-// Input için YYYY-MM-DD formatı gerekir
 const formatDateForInput = (date: Date) => {
   return format(date, 'yyyy-MM-dd');
 };
@@ -25,13 +25,10 @@ export function SidebarRight({ selectedFlock, onUpdateFlock }: SidebarRightProps
   const selectedDetails = selectedFlock ? calculateTimeline(selectedFlock) : null;
   const safeDetails = selectedDetails || { transfer: undefined, peak: undefined, exit: undefined, sanitationEnd: undefined };
 
-  // Tarih değişince çalışacak
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!selectedFlock) return;
     const newDateStr = e.target.value;
     if (!newDateStr) return;
-    
-    // String tarihi Date objesine çevir
     const newDate = parseISO(newDateStr);
     if (isValid(newDate)) {
        onUpdateFlock({ ...selectedFlock, hatchDate: newDate });
@@ -55,20 +52,23 @@ export function SidebarRight({ selectedFlock, onUpdateFlock }: SidebarRightProps
                </div>
                <div className="flex justify-between items-start mb-2 relative z-10">
                   <span className="text-2xl font-bold text-slate-800">#{selectedFlock.id}</span>
-                  <span className={`text-[10px] px-2 py-1 rounded-full text-white font-bold ${selectedFlock.isMolting ? 'bg-emerald-500' : 'bg-green-500'}`}>
-                     {selectedFlock.isMolting ? 'MOLTING' : 'STANDART'}
-                  </span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className={`text-[10px] px-2 py-1 rounded-full text-white font-bold ${selectedFlock.isMolting ? 'bg-emerald-500' : 'bg-green-500'}`}>
+                        {selectedFlock.isMolting ? 'MOLT' : 'STD'}
+                    </span>
+                  </div>
                </div>
                <div className="text-sm text-slate-500 relative z-10">
                   Konum: <span className="font-semibold text-slate-700">{INITIAL_COOPS.find(c => c.id === selectedFlock.coopId)?.name}</span>
                </div>
             </div>
+            
 
-            {/* 2. Tarih Düzenleme Alanı */}
+            {/* 2. Tarih Düzenleme */}
             <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
                 <label className="text-[10px] font-bold text-amber-700 uppercase mb-1 flex items-center gap-1">
                   <Edit3 size={10} />
-                  Kuluçka Tarihi (Başlangıç)
+                  Kuluçka Tarihi
                 </label>
                 <input 
                   type="date" 
@@ -76,49 +76,31 @@ export function SidebarRight({ selectedFlock, onUpdateFlock }: SidebarRightProps
                   onChange={handleDateChange}
                   className="w-full bg-white border border-amber-200 text-slate-700 text-sm rounded p-2 focus:ring-2 focus:ring-amber-500 outline-none font-mono"
                 />
-                <p className="text-[10px] text-amber-600 mt-1 italic">
-                  Not: Bu tarihi değiştirince tüm plan otomatik kayar.
-                </p>
             </div>
 
-            {/* 3. Hesaplanan Kritik Tarihler */}
+            {/* 3. Kritik Tarihler (Önceki kodla aynı, kısaltıldı) */}
             <div className="space-y-4 pt-2">
                <div className="relative pl-4 border-l-2 border-slate-200 space-y-5 ml-2">
-                  
-                  {/* Transfer */}
                   <div className="flex items-start gap-3 -ml-[21px]">
                      <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center border-2 border-white ring-1 ring-slate-100"><TrendingUp size={10}/></div>
                      <div>
-                        <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wide">Transfer (16. H)</div>
+                        <div className="text-[10px] text-slate-500 uppercase font-bold">Transfer</div>
                         <div className="text-sm font-semibold text-slate-800">{safeFormat(safeDetails.transfer, 'dd MMM yyyy')}</div>
                      </div>
                   </div>
-
-                  {/* Pik */}
                   <div className="flex items-start gap-3 -ml-[21px]">
                      <div className="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center border-2 border-white ring-1 ring-slate-100"><Calendar size={10}/></div>
                      <div>
-                        <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wide">Pik Verim (24. H)</div>
+                        <div className="text-[10px] text-slate-500 uppercase font-bold">Pik Verim</div>
                         <div className="text-sm font-semibold text-slate-800">{safeFormat(safeDetails.peak, 'dd MMM yyyy')}</div>
                      </div>
                   </div>
-
-                  {/* Çıkış */}
                   <div className="flex items-start gap-3 -ml-[21px]">
                      <div className="w-5 h-5 rounded-full bg-red-100 text-red-600 flex items-center justify-center border-2 border-white ring-1 ring-slate-100"><Scissors size={10}/></div>
                      <div>
-                        <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wide">Kesim / Çıkış</div>
+                        <div className="text-[10px] text-slate-500 uppercase font-bold">Çıkış</div>
                         <div className="text-sm font-semibold text-slate-800">{safeFormat(safeDetails.exit, 'dd MMM yyyy')}</div>
                      </div>
-                  </div>
-               </div>
-
-               {/* Sanitasyon */}
-               <div className="flex items-center gap-3 bg-purple-50 p-3 rounded-lg border border-purple-100">
-                  <div className="w-8 h-8 rounded bg-white text-purple-600 flex items-center justify-center shadow-sm"><Droplets size={16}/></div>
-                  <div>
-                     <div className="text-[10px] text-purple-500 font-bold uppercase">Temizlik Bitiş</div>
-                     <div className="text-sm font-bold text-slate-800">{safeFormat(safeDetails.sanitationEnd, 'dd MMM yyyy')}</div>
                   </div>
                </div>
             </div>

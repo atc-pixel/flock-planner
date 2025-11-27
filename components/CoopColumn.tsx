@@ -23,22 +23,31 @@ export function CoopColumn({ coop, height, totalWeeks, flocks, timelineStart, se
   });
 
   return (
-    <div className="flex-1 min-w-[100px] flex flex-col">
+    <div 
+        // Wrapper'a min-height verdik ki içerik kadar uzasın
+        className="flex-1 min-w-[100px] flex flex-col border-r border-slate-200 bg-white"
+        style={{ minHeight: `${height}px` }}
+    >
       {/* Sticky Header */}
-      <div className="sticky top-0 h-10 bg-white border-b border-slate-300 flex items-center justify-center font-bold text-slate-700 shadow-sm z-40 border-r text-sm">
+      <div className="sticky top-0 h-10 bg-white border-b border-slate-300 flex items-center justify-center font-bold text-slate-700 shadow-sm z-40 text-sm">
         {coop.name}
       </div>
 
       {/* Droppable Alan */}
       <div 
         ref={setNodeRef} 
-        className={`relative border-r border-slate-200 transition-colors ${isOver ? 'bg-amber-50' : 'bg-white'}`}
-        style={{ height: `${height}px`, flex: 1 }}
+        className={`relative flex-1 w-full transition-colors ${isOver ? 'bg-amber-50' : ''}`}
+        style={{ height: `${height}px` }} 
       >
         {/* Izgara Çizgileri */}
-        <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute inset-0 pointer-events-none flex flex-col">
           {Array.from({ length: totalWeeks }).map((_, i) => (
-            <div key={i} className="border-b border-slate-50 w-full" style={{ height: `${RULES.pixelsPerWeek}px` }}></div>
+            <div 
+                key={i} 
+                // shrink-0: EKLENDİ (Satırların ezilmesini engeller)
+                className="border-b border-slate-100 w-full shrink-0" 
+                style={{ height: `${RULES.pixelsPerWeek}px` }}
+            ></div>
           ))}
         </div>
 
