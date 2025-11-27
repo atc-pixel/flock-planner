@@ -77,9 +77,10 @@ export function FlockCard({ flock, timelineStart, isSelected, onSelect, onRemove
     postMoltDarkHeight = layingHeight - moltStartTop;
   }
 
-  // Markerlar
-  const posWeek20 = 20 * RULES.pixelsPerWeek;
-  const posWeek24 = 24 * RULES.pixelsPerWeek;
+  // --- GÜNCELLENEN MARKER POZİSYONLARI ---
+  // (Hafta Sayısı - 1) * Pixel = O haftanın BAŞLANGIÇ (Üst) çizgisi
+  const posWeek20 = (20 - 1) * RULES.pixelsPerWeek;
+  const posWeek24 = (24 - 1) * RULES.pixelsPerWeek;
 
   const leftPos = flock.lane === 1 ? '52%' : '2%';
   const widthVal = '46%';
@@ -154,14 +155,13 @@ export function FlockCard({ flock, timelineStart, isSelected, onSelect, onRemove
       <div className="absolute inset-0 flex flex-col pointer-events-none z-20">
         {Array.from({ length: lifeWeeks }).map((_, i) => (
             <div key={i} className="w-full border-b border-white/20 flex items-center px-1 shrink-0" style={{ height: `${RULES.pixelsPerWeek}px` }}>
-                {/* GÜNCELLENDİ: min-w-[10px] -> min-w-2.5 */}
                 <span className="text-[8px] font-mono font-bold text-white/80 drop-shadow-sm min-w-2.5">{i + 1}</span>
                 {i === 0 && <span className="ml-0.5 text-[8px] font-bold text-white drop-shadow-md truncate">Civciv</span>}
             </div>
         ))}
       </div>
 
-      {/* SABİT MARKERLAR */}
+      {/* SABİT MARKERLAR (Güncellendi) */}
       <div className="absolute right-0 z-20 flex items-center justify-end pr-0.5" style={{ top: `${posWeek20}px`, height: `${RULES.pixelsPerWeek}px`, width: '100%' }}>
         <div className="bg-purple-600 text-white text-[7px] font-bold px-1 py-0.5 rounded shadow-md border border-white/50">%50</div>
       </div>

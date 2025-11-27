@@ -4,11 +4,12 @@ import { getAuth } from 'firebase/auth';
 
 // Firebase Konsolundan aldığın config objesini buraya yapıştır
 const firebaseConfig = {
-  apiKey: "AIzaSyCWEDW5IRWKxwXa1y8CltBxwA-PuuidbbQ",
-  authDomain: "tarim-gida.firebaseapp.com",
-  projectId: "tarim-gida",
-  storageBucket: "tarim-gida.firebasestorage.app",
-  messagingSenderId: 909681010758,
+  apiKey: "AIzaSyCWEDW5IRWKxwXa1y8CltBxwA-PuuidbbQ", // Kendi API Key'inizi buraya yapıştırın
+  authDomain: "tarim-gida.firebaseapp.com", 
+  projectId: "tarim-gida", 
+  storageBucket: "tarim-gida.firebasestorage.app", 
+  // DÜZELTME: messagingSenderId tırnak içine alındı (String olmalı)
+  messagingSenderId: "909681010758", 
   appId: "1:909681010758:web:8079eb97570326d954c247"
 };
 
