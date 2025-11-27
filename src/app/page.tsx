@@ -1,8 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { addWeeks, differenceInWeeks, differenceInCalendarDays, max, startOfDay } from 'date-fns';
+import { addWeeks, differenceInWeeks, differenceInCalendarDays, max, startOfDay, startOfWeek } from 'date-fns';
 import { DndContext, DragEndEvent, DragOverlay } from '@dnd-kit/core';
+import { useRouter } from 'next/navigation'; // Yönlendirme için
+
+// Firebase Modülleri
+import { db, auth } from '@/lib/firebase'; // auth eklendi
+import { onAuthStateChanged, User } from 'firebase/auth'; // Auth dinleyici
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 
 import { Flock, INITIAL_COOPS, RULES, calculateTimeline } from '@/lib/utils';
 import { Header } from '@/components/Header';
@@ -10,24 +16,66 @@ import { DateSidebar } from '@/components/DateSidebar';
 import { CoopColumn } from '@/components/CoopColumn';
 import { SidebarRight } from '@/components/SidebarRight';
 
-// Kümes başlıklarının yüksekliği (h-10 = 40px)
 const HEADER_HEIGHT = 40;
 
 export default function FlockPlanner() {
+  // --- AUTH STATE ---
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const router = useRouter();
+
+  // --- APP STATE ---
   const [flocks, setFlocks] = useState<Flock[]>([]);
   const [selectedFlockId, setSelectedFlockId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const highlightRef = useRef<HTMLDivElement>(null);
+
+  // 1. GÜVENLİK KONTROLÜ (AUTH GUARD)
+  useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      if (!currentUser) {
+        // Kullanıcı yoksa Login'e at
+        router.push('/login');
+      } else {
+        // Kullanıcı varsa içeri al
+        setUser(currentUser);
+      }
+      setAuthLoading(false);
+    });
+
+    return () => unsubscribeAuth();
+  }, [router]);
+
+  // 2. VERİ DİNLEME (Sadece kullanıcı giriş yapmışsa çalışır)
+  useEffect(() => {
+    if (!user) return; // Güvenlik önlemi
+
+    const unsubscribeData = onSnapshot(collection(db, "flocks"), (snapshot) => {
+      const liveData = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          coopId: data.coopId,
+          hatchDate: data.hatchDate?.toDate(),
+          isMolting: data.isMolting,
+          lane: data.lane,
+          moltDate: data.moltDate?.toDate(),
+          transferDate: data.transferDate?.toDate(),
+          exitDate: data.exitDate?.toDate(),
+        } as Flock;
+      });
+      setFlocks(liveData);
+    });
+
+    return () => unsubscribeData();
+  }, [user]); // user değişince (giriş yapınca) çalışır
 
   // --- TAKVİM AYARLARI ---
-  // 1. Başlangıç Tarihi: 01.01.2022
-  const timelineStart = useMemo(() => new Date(2022, 0, 1), []); 
-
-  // 2. Varsayılan Minimum Bitiş: 31.12.2027
+  const timelineStart = useMemo(() => startOfWeek(new Date(2023, 6, 1), { weekStartsOn: 1 }), []); 
   const minEndDate = useMemo(() => new Date(2027, 11, 31), []);
 
-  // 3. Dinamik Toplam Hafta
   const totalViewWeeks = useMemo(() => {
     let maxDate = minEndDate;
     if (flocks.length > 0) {
@@ -38,83 +86,136 @@ export default function FlockPlanner() {
       const latestFlockDate = max(flockEndDates);
       if (latestFlockDate > maxDate) maxDate = latestFlockDate;
     }
-    // +12 Hafta Tampon
     const bufferedEndDate = addWeeks(maxDate, 12);
     return Math.max(differenceInWeeks(bufferedEndDate, timelineStart), 52); 
   }, [flocks, minEndDate, timelineStart]);
 
   const totalHeight = totalViewWeeks * RULES.pixelsPerWeek;
 
-  // --- DÜZELTME: BUGÜN ÇİZGİSİ ---
-  // 1. Tam gün farkını al
   const daysUntilToday = differenceInCalendarDays(new Date(), timelineStart);
-  
-  // 2. Piksel konumu + HEADER YÜKSEKLİĞİ (40px)
   const todayTopPos = ((daysUntilToday / 7) * RULES.pixelsPerWeek) + HEADER_HEIGHT;
-  
-  // 3. Görsel hafta kontrolü (Kırmızı çizginin olduğu hafta)
   const weeksUntilToday = Math.floor(daysUntilToday / 7);
 
-  // Sayfa açılınca bugüne git
   useEffect(() => {
-    if (scrollContainerRef.current) {
-      const scrollPos = Math.max(0, todayTopPos - 300); // Biraz daha ortada dursun
+    if (scrollContainerRef.current && flocks.length === 0 && !authLoading) {
+      const scrollPos = Math.max(0, todayTopPos - 300);
       scrollContainerRef.current.scrollTop = scrollPos;
     }
-  }, [todayTopPos]);
+  }, [todayTopPos, flocks.length, authLoading]);
 
-  // --- AUTO LANE MANTIĞI ---
-  const handleDragEnd = (event: DragEndEvent) => {
+  // --- MOUSE HIGHLIGHT ---
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!highlightRef.current || !scrollContainerRef.current) return;
+    const rect = scrollContainerRef.current.getBoundingClientRect();
+    const relativeY = e.clientY - rect.top + scrollContainerRef.current.scrollTop;
+    const yWithoutHeader = relativeY - HEADER_HEIGHT;
+
+    if (yWithoutHeader < 0) {
+        highlightRef.current.style.display = 'none';
+        return;
+    }
+
+    const weekIndex = Math.floor(yWithoutHeader / RULES.pixelsPerWeek);
+    const topPos = (weekIndex * RULES.pixelsPerWeek) + HEADER_HEIGHT;
+
+    highlightRef.current.style.display = 'block';
+    highlightRef.current.style.transform = `translateY(${topPos}px)`;
+  };
+
+  const handleMouseLeave = () => {
+    if (highlightRef.current) {
+        highlightRef.current.style.display = 'none';
+    }
+  };
+
+  // --- ACTIONS ---
+  const handleDragEnd = async (event: DragEndEvent) => {
     setActiveId(null);
     const { over, active } = event;
 
     if (over && active.id === 'new-flock-source') {
       const coopId = over.id as string;
-      
-      // Varsayılan yeni sürü başlangıcı: Bugün
       const newHatchDate = startOfDay(new Date()); 
       const standardDuration = RULES.stdExitWeek + (RULES.sanitationWeeks || 3);
       const newEndDate = addWeeks(newHatchDate, standardDuration);
 
       const existingFlocksInCoop = flocks.filter(f => f.coopId === coopId);
-
       const isLane0Busy = existingFlocksInCoop.some(existingFlock => {
           if (existingFlock.lane !== 0) return false; 
           const existingTl = calculateTimeline(existingFlock);
           if (!existingTl) return false;
-          const overlap = (newHatchDate < existingTl.sanitationEnd) && (newEndDate > existingFlock.hatchDate);
-          return overlap;
+          return (newHatchDate < existingTl.sanitationEnd) && (newEndDate > existingFlock.hatchDate);
       });
 
       const assignedLane = isLane0Busy ? 1 : 0;
 
-      const newFlock: Flock = {
-        id: Math.random().toString().substring(2, 6),
+      const newFlockPayload = {
         coopId: coopId,
         hatchDate: newHatchDate, 
         isMolting: false,
-        lane: assignedLane as 0 | 1, 
-        moltDate: undefined,
-        transferDate: undefined,
-        exitDate: undefined, // YENİ: Varsayılan olarak boş
+        lane: assignedLane,
+        moltDate: null,
+        transferDate: null,
+        exitDate: null,
+        updatedBy: user?.email, // Kimin eklediğini de kaydedelim
+        updatedAt: new Date()
       };
 
-      setFlocks([...flocks, newFlock]);
-      setSelectedFlockId(newFlock.id);
+      try {
+        const docRef = await addDoc(collection(db, "flocks"), newFlockPayload);
+        setSelectedFlockId(docRef.id);
+      } catch (e) {
+        console.error("Ekleme hatası:", e);
+        alert("Sürü eklenirken bir hata oluştu. İnternet bağlantınızı kontrol edin.");
+      }
     }
   };
 
-  const removeFlock = (id: string, e: React.MouseEvent) => {
+  const removeFlock = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setFlocks(curr => curr.filter(f => f.id !== id));
-    if (selectedFlockId === id) setSelectedFlockId(null);
+    if (confirm("Bu sürüyü silmek istediğinize emin misiniz?")) {
+      try {
+        await deleteDoc(doc(db, "flocks", id));
+        if (selectedFlockId === id) setSelectedFlockId(null);
+      } catch (error) {
+        console.error("Silme hatası:", error);
+      }
+    }
   };
 
-  const updateFlock = (updatedFlock: Flock) => {
-    setFlocks(curr => curr.map(f => f.id === updatedFlock.id ? updatedFlock : f));
+  const updateFlock = async (updatedFlock: Flock) => {
+    try {
+      const flockRef = doc(db, "flocks", updatedFlock.id);
+      await updateDoc(flockRef, {
+        coopId: updatedFlock.coopId,
+        hatchDate: updatedFlock.hatchDate,
+        isMolting: updatedFlock.isMolting,
+        lane: updatedFlock.lane,
+        moltDate: updatedFlock.moltDate || null,
+        transferDate: updatedFlock.transferDate || null,
+        exitDate: updatedFlock.exitDate || null,
+        updatedBy: user?.email,
+        updatedAt: new Date()
+      });
+    } catch (error) {
+      console.error("Güncelleme hatası:", error);
+    }
   };
 
   const selectedFlock = flocks.find(f => f.id === selectedFlockId);
+
+  // YÜKLENİYOR EKRANI
+  if (authLoading) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
+        <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-slate-500 font-medium">Sistem Yükleniyor...</p>
+      </div>
+    );
+  }
+
+  // Kullanıcı yoksa boş döndür (Router zaten Login'e atıyor)
+  if (!user) return null;
 
   return (
     <DndContext onDragStart={(e) => setActiveId(e.active.id as string)} onDragEnd={handleDragEnd}>
@@ -123,15 +224,22 @@ export default function FlockPlanner() {
         <div className="flex grow overflow-hidden">
           <div 
             ref={scrollContainerRef}
-            className="grow overflow-y-auto relative flex scroll-smooth" 
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
+            className="grow overflow-y-auto relative flex scroll-smooth group" 
             style={{ height: 'calc(100vh - 64px)' }}
           >
+            <div 
+                ref={highlightRef}
+                className="absolute left-0 right-0 border-y-2 border-blue-400 bg-blue-100/10 pointer-events-none z-20 hidden transition-transform duration-75 ease-out"
+                style={{ height: `${RULES.pixelsPerWeek}px` }}
+            >
+                <div className="absolute left-0 top-0 bottom-0 bg-blue-500 w-1"></div>
+            </div>
+
             <DateSidebar timelineStart={timelineStart} totalWeeks={totalViewWeeks} />
             
-            {/* minHeight: İçerik kadar uzasın */}
             <div className="flex grow relative" style={{ minHeight: `${totalHeight + HEADER_HEIGHT}px` }}>
-              
-              {/* BUGÜN ÇİZGİSİ */}
               {weeksUntilToday >= 0 && weeksUntilToday < totalViewWeeks && (
                 <div 
                    className="absolute left-0 right-0 border-t-2 border-red-500 z-50 pointer-events-none opacity-80"
