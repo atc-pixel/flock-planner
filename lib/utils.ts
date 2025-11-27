@@ -7,8 +7,13 @@ export type Flock = {
   id: string; 
   coopId: string; 
   hatchDate: Date; 
-  isMolting: boolean;
-  lane: 0 | 1; // YENİ EKLENDİ: 0 = Sol, 1 = Sağ
+  isMolting: boolean; 
+  lane: 0 | 1; 
+  
+  // OPSİYONEL TARİHLER
+  moltDate?: Date;      // Molting Başlangıç
+  transferDate?: Date;  // Özel Transfer
+  exitDate?: Date;      // Özel Çıkış (Kesim)
 };
 
 // --- SABİTLER ---
@@ -19,24 +24,41 @@ export const INITIAL_COOPS: Coop[] = [
 ];
 
 export const RULES = {
-  transferWeek: 16,
+  transferRangeStart: 16,
+  transferRangeDuration: 3, 
   peakMaxWeek: 24,
-  stdExitWeek: 80,
-  moltingExitWeek: 120,
+  
+  // Varsayılan Süreler
+  stdExitWeek: 90,       
+  moltingExitWeek: 125,  
+  
   sanitationWeeks: 3,
   pixelsPerWeek: 24,
 };
 
-// --- HESAPLAMA ---
+// --- HESAPLAMA MOTORU ---
 export const calculateTimeline = (flock: Flock) => {
   if (!flock.hatchDate) return null;
 
-  const transfer = addWeeks(flock.hatchDate, RULES.transferWeek);
+  // 1. Transfer
+  const transfer = flock.transferDate 
+    ? flock.transferDate 
+    : addWeeks(flock.hatchDate, RULES.transferRangeStart);
+
+  // 2. Pik
   const peak = addWeeks(flock.hatchDate, RULES.peakMaxWeek);
   
-  const exitWeek = flock.isMolting ? RULES.moltingExitWeek : RULES.stdExitWeek;
-  const exit = addWeeks(flock.hatchDate, exitWeek);
+  // 3. Çıkış (Exit)
+  // Eğer manuel çıkış tarihi varsa onu kullan, yoksa kurallara göre hesapla
+  let exit: Date;
+  if (flock.exitDate) {
+    exit = flock.exitDate;
+  } else {
+    const exitWeek = flock.isMolting ? RULES.moltingExitWeek : RULES.stdExitWeek;
+    exit = addWeeks(flock.hatchDate, exitWeek);
+  }
   
+  // 4. Sanitasyon (Çıkıştan sonraki 3 hafta)
   const sanWeeks = RULES.sanitationWeeks || 3; 
   const sanitationEnd = addWeeks(exit, sanWeeks);
   

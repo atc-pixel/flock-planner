@@ -94,6 +94,9 @@ export default function FlockPlanner() {
         hatchDate: newHatchDate, 
         isMolting: false,
         lane: assignedLane as 0 | 1, 
+        moltDate: undefined,
+        transferDate: undefined,
+        exitDate: undefined, // YENİ: Varsayılan olarak boş
       };
 
       setFlocks([...flocks, newFlock]);
