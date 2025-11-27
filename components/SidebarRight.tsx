@@ -3,8 +3,7 @@
 import React from 'react';
 import { format, isValid, parseISO } from 'date-fns';
 import { tr } from 'date-fns/locale';
-// Columns ikonu eklendi
-import { Bird, TrendingUp, Calendar, Scissors, Droplets, Edit3, Columns } from 'lucide-react';
+import { Bird, TrendingUp, Calendar, Scissors, Droplets, Edit3 } from 'lucide-react';
 import { Flock, calculateTimeline, INITIAL_COOPS } from '@/lib/utils';
 
 interface SidebarRightProps {
@@ -62,13 +61,13 @@ export function SidebarRight({ selectedFlock, onUpdateFlock }: SidebarRightProps
                   Konum: <span className="font-semibold text-slate-700">{INITIAL_COOPS.find(c => c.id === selectedFlock.coopId)?.name}</span>
                </div>
             </div>
-            
 
             {/* 2. Tarih Düzenleme */}
             <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
                 <label className="text-[10px] font-bold text-amber-700 uppercase mb-1 flex items-center gap-1">
                   <Edit3 size={10} />
-                  Kuluçka Tarihi
+                  {/* GÜNCELLENDİ: İsim değişikliği yapıldı */}
+                  Civciv Giriş Tarihi (İlk Gün)
                 </label>
                 <input 
                   type="date" 
@@ -78,7 +77,7 @@ export function SidebarRight({ selectedFlock, onUpdateFlock }: SidebarRightProps
                 />
             </div>
 
-            {/* 3. Kritik Tarihler (Önceki kodla aynı, kısaltıldı) */}
+            {/* 3. Kritik Tarihler */}
             <div className="space-y-4 pt-2">
                <div className="relative pl-4 border-l-2 border-slate-200 space-y-5 ml-2">
                   <div className="flex items-start gap-3 -ml-[21px]">
