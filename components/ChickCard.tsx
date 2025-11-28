@@ -11,7 +11,7 @@ interface ChickCardProps {
   isSelected: boolean;
   onSelect: (id: string) => void;
   onUpdate: (flock: Flock) => void;
-  onRemove: (id: string, e: React.MouseEvent) => void; // EKLENDİ
+  onRemove: (id: string, e: React.MouseEvent) => void;
 }
 
 export function ChickCard({ flock, timelineStart, isSelected, onSelect, onUpdate, onRemove }: ChickCardProps) {
@@ -39,6 +39,10 @@ export function ChickCard({ flock, timelineStart, isSelected, onSelect, onUpdate
   const rearingHeight = (transferStartDayOffset / 7) * RULES.pixelsPerWeek;
   const transferHeight = transferDurationWeeks * RULES.pixelsPerWeek;
   const remainingHeight = totalHeight - rearingHeight - transferHeight;
+
+  // Marker Konumları
+  const posWeek20 = 20 * RULES.pixelsPerWeek;
+  const posWeek24 = 24 * RULES.pixelsPerWeek;
 
   // --- AKSİYONLAR ---
   const shiftWeek = (e: React.MouseEvent, direction: 'up' | 'down') => {
@@ -83,11 +87,18 @@ export function ChickCard({ flock, timelineStart, isSelected, onSelect, onUpdate
          <div className="h-4 w-full bg-linear-to-b from-transparent to-black/10"></div>
       </div>
 
-      {/* CETVEL / HAFTA NUMARALARI (EKLENDİ) */}
+      {/* MARKERLAR (EKLENDİ) */}
+      <div className="absolute right-0 z-20 flex items-center justify-end pr-0.5" style={{ top: `${posWeek20}px`, height: `${RULES.pixelsPerWeek}px`, width: '100%' }}>
+        <div className="bg-purple-600 text-white text-[7px] font-bold px-1 py-0.5 rounded shadow-md border border-white/50">%50</div>
+      </div>
+      <div className="absolute right-0 z-20 flex items-center justify-end pr-0.5" style={{ top: `${posWeek24}px`, height: `${RULES.pixelsPerWeek}px`, width: '100%' }}>
+        <div className="bg-red-600 text-white text-[7px] font-bold px-1 py-0.5 rounded shadow-md border border-white/50">PİK</div>
+      </div>
+
+      {/* CETVEL / HAFTA NUMARALARI */}
       <div className="absolute inset-0 flex flex-col pointer-events-none z-20">
         {Array.from({ length: maxWeeks }).map((_, i) => (
             <div key={i} className="w-full border-b border-black/5 flex items-center px-1 shrink-0" style={{ height: `${RULES.pixelsPerWeek}px` }}>
-                {/* Hafta numarası */}
                 <span className="text-[8px] font-mono font-bold text-black/40 drop-shadow-sm min-w-2.5">{i + 1}</span>
             </div>
         ))}
@@ -95,7 +106,7 @@ export function ChickCard({ flock, timelineStart, isSelected, onSelect, onUpdate
 
       {/* --- KONTROLLER --- */}
       
-      {/* 1. SİLME BUTONU (Sağ Üst Köşe) */}
+      {/* 1. SİLME BUTONU */}
       <button 
         onClick={(e) => onRemove(flock.id, e)} 
         className="absolute top-0 right-0 w-5 h-5 bg-red-600 text-white rounded-bl-lg flex items-center justify-center opacity-0 group-hover:opacity-100 shadow-md hover:bg-red-700 text-[10px] transition-opacity z-50 font-bold pointer-events-auto"
@@ -103,7 +114,7 @@ export function ChickCard({ flock, timelineStart, isSelected, onSelect, onUpdate
         ×
       </button>
 
-      {/* 2. YUKARI/AŞAĞI OKLAR (Silme butonunun altına kaydırıldı: top-7) */}
+      {/* 2. YUKARI/AŞAĞI OKLAR */}
       <div className="absolute right-1 top-7 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-40 pointer-events-auto">
          <button 
             onClick={(e) => shiftWeek(e, 'up')}
