@@ -24,8 +24,11 @@ export const INITIAL_COOPS: Coop[] = [
 ];
 
 export const RULES = {
-  transferRangeStart: 16,
-  transferRangeDuration: 3, 
+  // GÜNCELLEME: 14-18. Haftalar arası (14. haftanın başı = 13 hafta bitmiş demektir)
+  transferRangeStart: 13, 
+  // GÜNCELLEME: 14, 15, 16, 17, 18 (Toplam 5 hafta)
+  transferRangeDuration: 5, 
+  
   peakMaxWeek: 24,
   
   // Varsayılan Süreler
@@ -49,7 +52,6 @@ export const calculateTimeline = (flock: Flock) => {
   const peak = addWeeks(flock.hatchDate, RULES.peakMaxWeek);
   
   // 3. Çıkış (Exit)
-  // Eğer manuel çıkış tarihi varsa onu kullan, yoksa kurallara göre hesapla
   let exit: Date;
   if (flock.exitDate) {
     exit = flock.exitDate;
@@ -58,7 +60,7 @@ export const calculateTimeline = (flock: Flock) => {
     exit = addWeeks(flock.hatchDate, exitWeek);
   }
   
-  // 4. Sanitasyon (Çıkıştan sonraki 3 hafta)
+  // 4. Sanitasyon
   const sanWeeks = RULES.sanitationWeeks || 3; 
   const sanitationEnd = addWeeks(exit, sanWeeks);
   

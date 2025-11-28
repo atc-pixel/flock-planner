@@ -267,6 +267,7 @@ export default function FlockPlanner() {
                   selectedFlockId={selectedFlockId}
                   onSelectFlock={setSelectedFlockId}
                   onRemoveFlock={removeFlock}
+                  onUpdateFlock={updateFlock} // BURASI EKLENDİ
                 />
               ))}
             </div>
