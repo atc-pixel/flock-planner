@@ -40,9 +40,9 @@ export function ChickCard({ flock, timelineStart, isSelected, onSelect, onUpdate
   const transferHeight = transferDurationWeeks * RULES.pixelsPerWeek;
   const remainingHeight = totalHeight - rearingHeight - transferHeight;
 
-  // Marker Konumları
-  const posWeek20 = 20 * RULES.pixelsPerWeek;
-  const posWeek24 = 24 * RULES.pixelsPerWeek;
+  // DÜZELTME: Marker Konumları (0-index olduğu için 1 çıkarıyoruz)
+  const posWeek20 = (20 - 1) * RULES.pixelsPerWeek;
+  const posWeek24 = (24 - 1) * RULES.pixelsPerWeek;
 
   // --- AKSİYONLAR ---
   const shiftWeek = (e: React.MouseEvent, direction: 'up' | 'down') => {
@@ -84,10 +84,10 @@ export function ChickCard({ flock, timelineStart, isSelected, onSelect, onUpdate
 
       {/* 3. İlk Verim (Amber) */}
       <div className="w-full bg-amber-300 relative shrink-0 flex flex-col justify-end" style={{ height: `${Math.max(0, remainingHeight)}px` }}>
-         <div className="h-4 w-full bg-linear-to-b from-transparent to-black/10"></div>
+         <div className="h-4 w-full bg-gradient-to-b from-transparent to-black/10"></div>
       </div>
 
-      {/* MARKERLAR (EKLENDİ) */}
+      {/* MARKERLAR */}
       <div className="absolute right-0 z-20 flex items-center justify-end pr-0.5" style={{ top: `${posWeek20}px`, height: `${RULES.pixelsPerWeek}px`, width: '100%' }}>
         <div className="bg-purple-600 text-white text-[7px] font-bold px-1 py-0.5 rounded shadow-md border border-white/50">%50</div>
       </div>

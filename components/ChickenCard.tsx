@@ -65,10 +65,10 @@ export function ChickenCard({ flock, timelineStart, isSelected, onSelect, onRemo
     postMoltDarkHeight = layingHeight - moltStartTop;
   }
 
-  const posWeek20 = 20 * RULES.pixelsPerWeek;
-  const posWeek24 = 24 * RULES.pixelsPerWeek;
+  // DÜZELTME: Marker Konumları (0-index olduğu için 1 çıkarıyoruz)
+  const posWeek20 = (20 - 1) * RULES.pixelsPerWeek;
+  const posWeek24 = (24 - 1) * RULES.pixelsPerWeek;
 
-  // Tavuk Kartı her zaman sağda (Lane 1 pozisyonu)
   const leftPos = '52%'; 
   const widthVal = '46%';
 
