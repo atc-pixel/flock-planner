@@ -40,7 +40,6 @@ export function ChickCard({ flock, timelineStart, isSelected, onSelect, onUpdate
   const transferHeight = transferDurationWeeks * RULES.pixelsPerWeek;
   const remainingHeight = totalHeight - rearingHeight - transferHeight;
 
-  // DÜZELTME: Marker Konumları (0-index olduğu için 1 çıkarıyoruz)
   const posWeek20 = (20 - 1) * RULES.pixelsPerWeek;
   const posWeek24 = (24 - 1) * RULES.pixelsPerWeek;
 
@@ -68,7 +67,7 @@ export function ChickCard({ flock, timelineStart, isSelected, onSelect, onUpdate
       style={{ 
         top: `${topPos}px`, 
         height: `${totalHeight}px`,
-        left: '2%',
+        left: '52%', // DÜZELTME: Civciv Kartı artık SAĞDA (52%)
         width: '46%'
       }}
     >

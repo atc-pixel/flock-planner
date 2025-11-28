@@ -132,7 +132,7 @@ export function SidebarRight({ selectedFlock, onUpdateFlock }: SidebarRightProps
                <p className="text-[10px] mt-2 opacity-70">
                  {selectedFlock.lane === 0 
                     ? "Sürü büyütme aşamasında. Üretime geçmek için anahtarı açın." 
-                    : "Sürü üretim aşamasında. (Sağ şeritte görüntülenir)"}
+                    : "Sürü üretim aşamasında. (Sol şeritte görüntülenir)"} {/* Metin güncellendi */}
                </p>
             </div>
 
