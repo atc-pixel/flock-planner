@@ -1,19 +1,22 @@
 import { addWeeks } from 'date-fns';
 
+
 // --- TİPLER ---
 export type Coop = { id: string; name: string; };
 
 export type Flock = { 
   id: string; 
+  name: string;         // YENİ: Örn "#01"
   coopId: string; 
   hatchDate: Date; 
+  initialCount: number; // YENİ: Mevcut hesaplaması için başlangıç sayısı
   isMolting: boolean; 
   lane: 0 | 1; 
   
   // OPSİYONEL TARİHLER
-  moltDate?: Date;      // Molting Başlangıç
-  transferDate?: Date;  // Özel Transfer
-  exitDate?: Date;      // Özel Çıkış (Kesim)
+  moltDate?: Date;
+  transferDate?: Date;
+  exitDate?: Date;
 };
 
 // --- SABİTLER ---
@@ -37,6 +40,26 @@ export const RULES = {
   
   sanitationWeeks: 3,
   pixelsPerWeek: 24,
+};
+
+export type ProductionLog = {
+  id?: string;
+  flockId: string;      // Ana referansımız Sürü ID'si
+  coopId: string;       // Tarihçesi için tutuyoruz
+  date: Date;           // Timestamp
+  
+  // Girdiler
+  mortality: number;    // Ölü
+  cull: number;         // Iskarta/Kesim (Opsiyonel ama gerekli olabilir)
+  eggCount: number;     // Toplam Üretilen Yumurta
+  brokenEggCount: number; // Hasarlı
+  dirtyEggCount: number;  // Kirli
+  
+  // Tüketim
+  feedConsumed: number; // kg
+  waterConsumed: number; // litre
+  
+  updatedAt?: Date;
 };
 
 // --- HESAPLAMA MOTORU ---

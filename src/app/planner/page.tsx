@@ -1,0 +1,290 @@
+'use client';
+
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { addWeeks, differenceInWeeks, differenceInCalendarDays, max, startOfDay, startOfWeek } from 'date-fns';
+import { DndContext, DragEndEvent, DragOverlay } from '@dnd-kit/core';
+import { useRouter } from 'next/navigation';
+
+// Firebase Modülleri
+import { db, auth } from '@/lib/firebase';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+
+import { Flock, INITIAL_COOPS, RULES, calculateTimeline } from '@/lib/utils';
+import { Header } from '@/components/planner/Header';
+import { DateSidebar } from '@/components/planner/DateSidebar';
+import { CoopColumn } from '@/components/planner/CoopColumn';
+import { SidebarRight } from '@/components/planner/SidebarRight';
+
+const HEADER_HEIGHT = 40;
+
+export default function FlockPlanner() {
+  // --- KİMLİK DOĞRULAMA (AUTH) ---
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const router = useRouter();
+
+  // --- UYGULAMA STATE'İ ---
+  const [flocks, setFlocks] = useState<Flock[]>([]);
+  const [selectedFlockId, setSelectedFlockId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const highlightRef = useRef<HTMLDivElement>(null);
+
+  // 1. KULLANICI KONTROLÜ
+  useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      if (!currentUser) {
+        router.push('/login'); // Giriş yoksa Login'e at
+      } else {
+        setUser(currentUser);
+      }
+      setAuthLoading(false);
+    });
+    return () => unsubscribeAuth();
+  }, [router]);
+
+  // 2. VERİTABANI DİNLEME (REAL-TIME)
+  useEffect(() => {
+    if (!user) return;
+
+    // 'flocks' koleksiyonunu canlı dinle
+    const unsubscribeData = onSnapshot(collection(db, "flocks"), (snapshot) => {
+      const liveData = snapshot.docs.map(doc => {
+        const data = doc.data();
+        // Firestore Timestamp -> JS Date dönüşümü
+        return {
+          id: doc.id,
+          coopId: data.coopId,
+          hatchDate: data.hatchDate?.toDate(),
+          isMolting: data.isMolting,
+          lane: data.lane,
+          moltDate: data.moltDate?.toDate(),
+          transferDate: data.transferDate?.toDate(),
+          exitDate: data.exitDate?.toDate(),
+        } as Flock;
+      });
+      setFlocks(liveData);
+    });
+
+    return () => unsubscribeData();
+  }, [user]);
+
+  // --- TAKVİM AYARLARI (GÜNCEL: 01.07.2023 BAŞLANGIÇ) ---
+  const timelineStart = useMemo(() => startOfWeek(new Date(2023, 6, 1), { weekStartsOn: 1 }), []); 
+  const minEndDate = useMemo(() => new Date(2027, 11, 31), []);
+
+  const totalViewWeeks = useMemo(() => {
+    let maxDate = minEndDate;
+    if (flocks.length > 0) {
+      const flockEndDates = flocks.map(f => {
+        const tl = calculateTimeline(f);
+        return tl ? tl.sanitationEnd : minEndDate;
+      });
+      const latestFlockDate = max(flockEndDates);
+      if (latestFlockDate > maxDate) maxDate = latestFlockDate;
+    }
+    const bufferedEndDate = addWeeks(maxDate, 12);
+    return Math.max(differenceInWeeks(bufferedEndDate, timelineStart), 52); 
+  }, [flocks, minEndDate, timelineStart]);
+
+  const totalHeight = totalViewWeeks * RULES.pixelsPerWeek;
+
+  // Bugün Çizgisi Konumu
+  const daysUntilToday = differenceInCalendarDays(new Date(), timelineStart);
+  const todayTopPos = ((daysUntilToday / 7) * RULES.pixelsPerWeek) + HEADER_HEIGHT;
+  const weeksUntilToday = Math.floor(daysUntilToday / 7);
+
+  // İlk açılışta bugüne odaklan
+  useEffect(() => {
+    if (scrollContainerRef.current && flocks.length === 0 && !authLoading) {
+      const scrollPos = Math.max(0, todayTopPos - 300);
+      scrollContainerRef.current.scrollTop = scrollPos;
+    }
+  }, [todayTopPos, flocks.length, authLoading]);
+
+  // --- GÖRSEL: HAYALET SATIR ---
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!highlightRef.current || !scrollContainerRef.current) return;
+    const rect = scrollContainerRef.current.getBoundingClientRect();
+    const relativeY = e.clientY - rect.top + scrollContainerRef.current.scrollTop;
+    const yWithoutHeader = relativeY - HEADER_HEIGHT;
+
+    if (yWithoutHeader < 0) {
+        highlightRef.current.style.display = 'none';
+        return;
+    }
+
+    const weekIndex = Math.floor(yWithoutHeader / RULES.pixelsPerWeek);
+    const topPos = (weekIndex * RULES.pixelsPerWeek) + HEADER_HEIGHT;
+
+    highlightRef.current.style.display = 'block';
+    highlightRef.current.style.transform = `translateY(${topPos}px)`;
+  };
+
+  const handleMouseLeave = () => {
+    if (highlightRef.current) {
+        highlightRef.current.style.display = 'none';
+    }
+  };
+
+  // --- FIREBASE İŞLEMLERİ (CRUD) ---
+
+  // 1. EKLEME (Drag End)
+  const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveId(null);
+    const { over, active } = event;
+
+    if (over && active.id === 'new-flock-source') {
+      const coopId = over.id as string;
+      const newHatchDate = startOfDay(new Date()); 
+      const standardDuration = RULES.stdExitWeek + (RULES.sanitationWeeks || 3);
+      const newEndDate = addWeeks(newHatchDate, standardDuration);
+
+      const existingFlocksInCoop = flocks.filter(f => f.coopId === coopId);
+      const isLane0Busy = existingFlocksInCoop.some(existingFlock => {
+          if (existingFlock.lane !== 0) return false; 
+          const existingTl = calculateTimeline(existingFlock);
+          if (!existingTl) return false;
+          return (newHatchDate < existingTl.sanitationEnd) && (newEndDate > existingFlock.hatchDate);
+      });
+
+      const assignedLane = isLane0Busy ? 1 : 0;
+
+      // Firestore'a gidecek ham veri (null önemli, undefined hata verir)
+      const newFlockPayload = {
+        coopId: coopId,
+        hatchDate: newHatchDate, 
+        isMolting: false,
+        lane: assignedLane,
+        moltDate: null,
+        transferDate: null,
+        exitDate: null,
+        updatedBy: user?.email,
+        updatedAt: new Date()
+      };
+
+      try {
+        const docRef = await addDoc(collection(db, "flocks"), newFlockPayload);
+        setSelectedFlockId(docRef.id);
+      } catch (e) {
+        console.error("Ekleme hatası:", e);
+        alert("Bağlantı hatası: Sürü eklenemedi.");
+      }
+    }
+  };
+
+  // 2. SİLME
+  const removeFlock = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm("Bu sürüyü silmek istediğinize emin misiniz?")) {
+      try {
+        await deleteDoc(doc(db, "flocks", id));
+        if (selectedFlockId === id) setSelectedFlockId(null);
+      } catch (error) {
+        console.error("Silme hatası:", error);
+      }
+    }
+  };
+
+  // 3. GÜNCELLEME (Tarih, Molt vb.)
+  const updateFlock = async (updatedFlock: Flock) => {
+    try {
+      const flockRef = doc(db, "flocks", updatedFlock.id);
+      await updateDoc(flockRef, {
+        coopId: updatedFlock.coopId,
+        hatchDate: updatedFlock.hatchDate,
+        isMolting: updatedFlock.isMolting,
+        lane: updatedFlock.lane,
+        moltDate: updatedFlock.moltDate || null,
+        transferDate: updatedFlock.transferDate || null,
+        exitDate: updatedFlock.exitDate || null,
+        updatedBy: user?.email,
+        updatedAt: new Date()
+      });
+    } catch (error) {
+      console.error("Güncelleme hatası:", error);
+    }
+  };
+
+  const selectedFlock = flocks.find(f => f.id === selectedFlockId);
+
+  // YÜKLENİYOR DURUMU
+  if (authLoading) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
+        <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-slate-500 font-medium">Sistem Yükleniyor...</p>
+      </div>
+    );
+  }
+
+  if (!user) return null;
+
+  return (
+    <DndContext onDragStart={(e) => setActiveId(e.active.id as string)} onDragEnd={handleDragEnd}>
+      <div className="h-screen flex flex-col bg-slate-50 font-sans overflow-hidden">
+        <Header />
+        <div className="flex grow overflow-hidden">
+          <div 
+            ref={scrollContainerRef}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
+            className="grow overflow-y-auto relative flex scroll-smooth group" 
+            style={{ height: 'calc(100vh - 64px)' }}
+          >
+            {/* HAYALET SATIR */}
+            <div 
+                ref={highlightRef}
+                className="absolute left-0 right-0 border-y-2 border-blue-400 bg-blue-100/10 pointer-events-none z-20 hidden transition-transform duration-75 ease-out"
+                style={{ height: `${RULES.pixelsPerWeek}px` }}
+            >
+                <div className="absolute left-0 top-0 bottom-0 bg-blue-500 w-1"></div>
+            </div>
+
+            <DateSidebar timelineStart={timelineStart} totalWeeks={totalViewWeeks} />
+            
+            <div className="flex grow relative" style={{ minHeight: `${totalHeight + HEADER_HEIGHT}px` }}>
+              {/* BUGÜN ÇİZGİSİ */}
+              {weeksUntilToday >= 0 && weeksUntilToday < totalViewWeeks && (
+                <div 
+                   className="absolute left-0 right-0 border-t-2 border-red-500 z-50 pointer-events-none opacity-80"
+                   style={{ top: `${todayTopPos}px` }} 
+                >
+                    <div className="absolute right-0 -top-2.5 bg-red-500 text-white text-[9px] px-1 rounded font-bold shadow-sm">BUGÜN</div>
+                </div>
+              )}
+
+              {INITIAL_COOPS.map((coop) => (
+                <CoopColumn
+                  key={coop.id}
+                  coop={coop}
+                  height={totalHeight}
+                  totalWeeks={totalViewWeeks}
+                  flocks={flocks.filter(f => f.coopId === coop.id)}
+                  timelineStart={timelineStart}
+                  selectedFlockId={selectedFlockId}
+                  onSelectFlock={setSelectedFlockId}
+                  onRemoveFlock={removeFlock}
+                  onUpdateFlock={updateFlock} // BURASI EKLENDİ
+                />
+              ))}
+            </div>
+          </div>
+          <SidebarRight 
+            selectedFlock={selectedFlock}
+            onUpdateFlock={updateFlock}
+          />
+        </div>
+        <DragOverlay>
+            {activeId === 'new-flock-source' ? (
+                <div className="bg-amber-500 text-white px-3 py-2 rounded shadow-xl font-bold opacity-90 cursor-grabbing">
+                   + Yeni Sürü
+                </div>
+            ) : null}
+        </DragOverlay>
+      </div>
+    </DndContext>
+  );
+}

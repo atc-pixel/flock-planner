@@ -3,7 +3,7 @@
 import React from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { Coop, Flock, RULES } from '@/lib/utils';
-import { FlockCard } from './FlockCard';
+import { FlockCard } from './FlockCard'; // Import yolu ./FlockCard olmalı
 
 interface CoopColumnProps {
   coop: Coop;
@@ -14,12 +14,12 @@ interface CoopColumnProps {
   selectedFlockId: string | null;
   onSelectFlock: (id: string) => void;
   onRemoveFlock: (id: string, e: React.MouseEvent) => void;
-  onUpdateFlock: (flock: Flock) => void; // EKLENDİ
+  onUpdateFlock: (flock: Flock) => void;
 }
 
 export function CoopColumn({ 
     coop, height, totalWeeks, flocks, timelineStart, 
-    selectedFlockId, onSelectFlock, onRemoveFlock, onUpdateFlock // EKLENDİ 
+    selectedFlockId, onSelectFlock, onRemoveFlock, onUpdateFlock
 }: CoopColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: coop.id,
@@ -59,7 +59,7 @@ export function CoopColumn({
                isSelected={selectedFlockId === flock.id}
                onSelect={onSelectFlock}
                onRemove={onRemoveFlock}
-               onUpdate={onUpdateFlock} // EKLENDİ
+               onUpdate={onUpdateFlock}
              />
            ))}
         </div>

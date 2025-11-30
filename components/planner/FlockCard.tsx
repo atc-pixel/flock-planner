@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Flock } from '@/lib/utils';
+// Aynı klasörde oldukları için ./ ile import ediyoruz
 import { ChickCard } from './ChickCard';
 import { ChickenCard } from './ChickenCard';
 
@@ -25,7 +26,7 @@ export function FlockCard({ flock, timelineStart, isSelected, onSelect, onRemove
         isSelected={isSelected} 
         onSelect={onSelect}
         onUpdate={onUpdate}
-        onRemove={onRemove} // ARTIK CİVCİV DE SİLİNEBİLİR
+        onRemove={onRemove}
       />
     );
   }
