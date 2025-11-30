@@ -1,5 +1,3 @@
-// Dosya: src/components/production/types.ts
-
 export type TableRowData = {
   date: Date;
   logId?: string;
@@ -9,7 +7,18 @@ export type TableRowData = {
   dirtyEggCount: number;
   feedConsumed: number;
   waterConsumed: number;
+  
+  // Hesaplananlar
   currentBirds: number; 
   yield: number;
+  brokenRate: number;
+  dirtyRate: number;
+  ageInWeeks: number; // YENİ: Tavuk Yaşı (Hafta)
+  
   isDirty: boolean;
+  
+  specialEvent?: {
+    title: string;
+    color: string;
+  } | null;
 };
