@@ -15,33 +15,33 @@ export function ProductionTableRow({ row, index, onCellChange }: ProductionTable
   const isFutureDate = isFuture(row.date);
   const isCurrentDay = isToday(row.date);
   
-  // GÜNCELLEME: Çift haftaları renklendirmek için kontrol
+  // Zebra Renklendirme
   const isEvenWeek = row.ageInWeeks % 2 === 0;
 
   const rowId = `row-${format(row.date, 'yyyy-MM-dd')}`;
 
+  // GÜNCELLEME: Yükseklik h-5 (20px) olarak ayarlandı.
+  // leading-none eklenerek metnin dikeyde ortalanması sağlandı.
   const inputClass = (bgColor: string, ringColor: string, textColor: string) => 
-    `w-full h-7 text-center outline-none bg-transparent focus:${bgColor} focus:ring-inset focus:ring-1 focus:${ringColor} ${textColor} disabled:opacity-30 font-medium placeholder-transparent text-xs`;
+    `w-full h-5 text-center outline-none bg-transparent focus:${bgColor} focus:ring-inset focus:ring-1 focus:${ringColor} ${textColor} disabled:opacity-30 font-bold placeholder-transparent text-sm leading-none`;
 
-  // Satır Arka Plan Rengi Mantığı
-  let rowBgClass = 'hover:bg-blue-50/50 transition-colors'; // Varsayılan hover
+  let rowBgClass = 'bg-white hover:bg-blue-50/30';
   if (isCurrentDay) {
-    rowBgClass = 'bg-amber-50/60'; // Bugün ise amber
+    rowBgClass = 'bg-amber-50/60';
   } else if (isEvenWeek) {
-    rowBgClass = 'bg-slate-50/60 hover:bg-blue-50/50'; // Çift hafta ise hafif gri
-  } else {
-    rowBgClass = 'bg-white hover:bg-blue-50/50'; // Tek hafta ise beyaz
+    rowBgClass = 'bg-slate-50/80 hover:bg-blue-50/30';
   }
 
   return (
     <>
+      {/* ÖZEL GÜN ETIKETI */}
       {row.specialEvent && (
         <tr className="bg-slate-50">
-          <td colSpan={10} className="p-1 border-b border-slate-200">
+          <td colSpan={10} className="p-0 border-b border-slate-200">
             <div className={`
-              w-full text-center py-1 rounded-sm font-bold text-[10px] uppercase tracking-widest border
-              ${row.specialEvent.color === 'blue' ? 'bg-blue-100 text-blue-700 border-blue-200' : ''}
-              ${row.specialEvent.color === 'emerald' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : ''}
+              w-full text-center py-0.5 rounded-sm font-bold text-[9px] uppercase tracking-widest border-y
+              ${row.specialEvent.color === 'blue' ? 'bg-blue-50 text-blue-700 border-blue-100' : ''}
+              ${row.specialEvent.color === 'emerald' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : ''}
             `}>
               ✨ {row.specialEvent.title}
             </div>
@@ -49,101 +49,113 @@ export function ProductionTableRow({ row, index, onCellChange }: ProductionTable
         </tr>
       )}
 
+      {/* BUGÜN ÇİZGİSİ */}
       {isCurrentDay && (
         <tr>
-            <td colSpan={10} className="p-0 border-t-2 border-red-500 relative h-0">
-                <div className="absolute right-0 -top-2 bg-red-500 text-white text-[8px] px-1 py-0 rounded-l font-bold shadow-sm z-10">
+            <td colSpan={10} className="p-0 border-t-2 border-red-500 relative h-0 z-20">
+                <div className="absolute right-0 -top-2 bg-red-500 text-white text-[8px] px-1 py-0 rounded-l font-bold shadow-sm">
                     BUGÜN
                 </div>
             </td>
         </tr>
       )}
 
-      <tr id={rowId} className={`group ${rowBgClass}`}>
+      <tr 
+        id={rowId} 
+        className={`group transition-colors ${rowBgClass}`}
+      >
         {/* Tarih */}
-        <td className="p-1 border-r border-slate-100 sticky left-0 bg-inherit group-hover:bg-inherit font-medium text-slate-600 text-center z-10">
-          <div className="flex items-center justify-between px-1">
-            <span className={`text-[10px] ${isCurrentDay ? 'text-red-600 font-bold' : ''}`}>
-              {format(row.date, 'dd MMM', { locale: tr })}
+        <td className={`p-0 border-r border-slate-200 sticky left-0 font-medium text-slate-700 text-center z-10 shadow-[1px_0_0_0_rgba(0,0,0,0.05)] ${isCurrentDay ? 'bg-amber-50/90' : 'bg-white group-hover:bg-inherit'}`}>
+          <div className="flex items-center justify-start gap-1 px-2 h-5 whitespace-nowrap overflow-hidden">
+            <span className={`text-[11px] ${isCurrentDay ? 'text-red-600 font-bold' : ''}`}>
+              {format(row.date, 'dd MMM yyyy', { locale: tr })}
             </span>
-            <span className="text-[9px] text-slate-300 font-normal">
+            <span className="text-[10px] text-slate-400 font-semibold uppercase">
               {format(row.date, 'EEE', { locale: tr })}
             </span>
           </div>
         </td>
 
-        {/* HAFTA (Renklendirilmiş) */}
-        <td className="p-1 border-r border-slate-100 text-center">
-            <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold
-                ${isEvenWeek ? 'bg-indigo-50 text-indigo-400' : 'bg-slate-100 text-slate-400'}
+        {/* HAFTA */}
+        <td className="p-0 border-r border-slate-200 text-center">
+            <div className={`h-5 flex items-center justify-center font-mono font-black text-xs
+                ${isEvenWeek ? 'text-indigo-400' : 'text-slate-300'}
             `}>
                 {row.ageInWeeks}
-            </span>
+            </div>
         </td>
 
-        <td className="p-0 border-r border-slate-100">
+        {/* Ölü */}
+        <td className="p-0 border-r border-slate-200">
           <input 
             type="number"
             disabled={isFutureDate}
-            className={inputClass('bg-red-50', 'ring-red-200', 'text-red-600')}
+            className={inputClass('bg-red-50', 'ring-red-300', 'text-red-600')}
             placeholder="-"
             value={row.mortality === 0 ? '' : row.mortality}
             onChange={(e) => onCellChange(index, 'mortality', e.target.value)}
           />
         </td>
 
-        <td className="p-1 border-r border-slate-100 text-center text-slate-400 font-mono select-none text-[10px]">
+        {/* Mevcut */}
+        <td className="p-0 border-r border-slate-200 text-center text-slate-600 font-mono select-none text-xs font-bold flex items-center justify-center h-5">
           {row.currentBirds.toLocaleString()}
         </td>
 
-        <td className="p-0 border-r border-slate-100">
+        {/* Toplam Yumurta */}
+        <td className="p-0 border-r border-slate-200">
           <input 
             type="number"
             disabled={isFutureDate}
-            className={inputClass('bg-amber-50', 'ring-amber-200', 'text-slate-800 font-bold')}
+            className={inputClass('bg-amber-50', 'ring-amber-300', 'text-amber-900')}
             value={row.eggCount === 0 ? '' : row.eggCount}
             onChange={(e) => onCellChange(index, 'eggCount', e.target.value)}
           />
         </td>
 
-        <td className="p-0 border-r border-slate-100">
+        {/* Kırık */}
+        <td className="p-0 border-r border-slate-200">
           <input 
             type="number"
             disabled={isFutureDate}
-            className={inputClass('bg-slate-100', 'ring-slate-300', 'text-slate-500')}
+            className={inputClass('bg-slate-100', 'ring-slate-300', 'text-slate-600')}
             value={row.brokenEggCount === 0 ? '' : row.brokenEggCount}
             onChange={(e) => onCellChange(index, 'brokenEggCount', e.target.value)}
           />
         </td>
 
-        <td className="p-1 border-r border-slate-100 text-center text-[10px] text-slate-400 font-mono select-none">
+        {/* % Kırık */}
+        <td className="p-0 border-r border-slate-200 text-center text-xs font-bold text-slate-500 font-mono select-none flex items-center justify-center h-5">
           {row.brokenRate > 0 ? `%${row.brokenRate.toFixed(1)}` : '-'}
         </td>
 
-        <td className="p-0 border-r border-slate-100">
+        {/* Kirli */}
+        <td className="p-0 border-r border-slate-200">
           <input 
             type="number"
             disabled={isFutureDate}
-            className={inputClass('bg-slate-100', 'ring-slate-300', 'text-slate-500')}
+            className={inputClass('bg-slate-100', 'ring-slate-300', 'text-slate-600')}
             value={row.dirtyEggCount === 0 ? '' : row.dirtyEggCount}
             onChange={(e) => onCellChange(index, 'dirtyEggCount', e.target.value)}
           />
         </td>
 
-        <td className="p-1 border-r border-slate-100 text-center text-[10px] text-slate-400 font-mono select-none">
+        {/* % Kirli */}
+        <td className="p-0 border-r border-slate-200 text-center text-xs font-bold text-slate-500 font-mono select-none flex items-center justify-center h-5">
           {row.dirtyRate > 0 ? `%${row.dirtyRate.toFixed(1)}` : '-'}
         </td>
 
-        <td className="p-1 text-center font-bold bg-emerald-50/10">
+        {/* % Verim */}
+        <td className="p-0 text-center font-black bg-emerald-50/20 border-b border-slate-100 flex items-center justify-center h-5">
           {row.eggCount > 0 ? (
-            <span className={`px-1.5 py-0.5 rounded text-[9px] ${
-              row.yield > 90 ? 'bg-emerald-100 text-emerald-700' : 
-              row.yield < 80 ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'
+            <span className={`text-xs ${
+              row.yield > 90 ? 'text-emerald-700' : 
+              row.yield < 80 ? 'text-red-600' : 'text-amber-700'
             }`}>
               %{row.yield.toFixed(1)}
             </span>
           ) : (
-            <span className="text-slate-200 text-[10px]">-</span>
+            <span className="text-slate-300 text-xs">-</span>
           )}
         </td>
       </tr>

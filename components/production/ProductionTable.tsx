@@ -97,21 +97,20 @@ export function ProductionTable({ flock }: ProductionTableProps) {
     if (flock.id) fetchData();
   }, [flock]);
 
-  // GÜNCELLEME: Otomatik Scroll (Bugün - 6 gün)
+  // Otomatik Scroll (Bugün - 6 gün)
   useEffect(() => {
     if (!loading && rows.length > 0) {
-        // Hedef tarih: Bugün - 6 gün (İstek üzerine güncellendi)
+        // Hedef: 6 gün öncesi
         const targetDate = subDays(new Date(), 6);
         const targetId = `row-${format(targetDate, 'yyyy-MM-dd')}`;
         const element = document.getElementById(targetId);
 
         if (element) {
-            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            element.scrollIntoView({ behavior: 'auto', block: 'start' }); // 'smooth' yerine 'auto' daha stabil olabilir ilk açılışta
         } else {
-            // Eğer 6 gün öncesi yoksa (sürü çok yeniyse), doğrudan bugüne git
             const todayId = `row-${format(new Date(), 'yyyy-MM-dd')}`;
             const todayEl = document.getElementById(todayId);
-            if (todayEl) todayEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            if (todayEl) todayEl.scrollIntoView({ behavior: 'auto', block: 'center' });
         }
     }
   }, [loading, rows]);
@@ -187,8 +186,8 @@ export function ProductionTable({ flock }: ProductionTableProps) {
         saving={saving}
       />
 
-      <div className="overflow-auto grow scroll-smooth">
-        <table className="w-full text-xs text-left border-collapse relative">
+      <div className="overflow-auto grow scroll-smooth relative">
+        <table className="w-full text-xs text-left border-collapse border-spacing-0">
           <ProductionTableHeader />
           <tbody className="divide-y divide-slate-100">
             {rows.map((row, idx) => (
