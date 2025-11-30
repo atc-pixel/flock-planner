@@ -6,17 +6,17 @@ export type Coop = { id: string; name: string; };
 
 export type Flock = { 
   id: string; 
-  name: string;         // YENİ: Örn "#01"
+  name: string;         // YENİ: Sürü Kodu/Adı (Örn: #05)
   coopId: string; 
   hatchDate: Date; 
-  initialCount: number; // YENİ: Mevcut hesaplaması için başlangıç sayısı
+  initialCount: number; // YENİ: Başlangıçtaki hayvan sayısı
   isMolting: boolean; 
   lane: 0 | 1; 
   
   // OPSİYONEL TARİHLER
-  moltDate?: Date;
-  transferDate?: Date;
-  exitDate?: Date;
+  moltDate?: Date;      // Molting Başlangıç
+  transferDate?: Date;  // Özel Transfer
+  exitDate?: Date;      // Özel Çıkış (Kesim)
 };
 
 // --- SABİTLER ---
