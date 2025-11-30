@@ -83,7 +83,7 @@ export function ChickCard({ flock, timelineStart, isSelected, onSelect, onUpdate
 
       {/* 3. İlk Verim (Amber) */}
       <div className="w-full bg-amber-300 relative shrink-0 flex flex-col justify-end" style={{ height: `${Math.max(0, remainingHeight)}px` }}>
-         <div className="h-4 w-full bg-gradient-to-b from-transparent to-black/10"></div>
+         <div className="h-4 w-full bg-linear-to-b from-transparent to-black/10"></div>
       </div>
 
       {/* MARKERLAR */}
