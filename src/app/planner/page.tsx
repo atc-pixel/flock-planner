@@ -8,7 +8,10 @@ import { useRouter } from 'next/navigation';
 // Firebase
 import { db, auth } from '@/lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { 
+  collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, 
+  writeBatch, query, where,  getDocs     // EKLENDİ
+} from 'firebase/firestore';
 
 import { Flock, INITIAL_COOPS, RULES, calculateTimeline } from '@/lib/utils';
 
@@ -151,14 +154,46 @@ export default function FlockPlanner() { //
     setSelectedFlockId(newFlockId); // Yeni oluşturulan sürüyü seç
   };
 
-  // Sürü Silme
+  // Sürü ve Bağlı Verileri Silme
   const removeFlock = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm("Bu sürüyü silmek istediğinize emin misiniz?")) {
-      try {
-        await deleteDoc(doc(db, "flocks", id));
-        if (selectedFlockId === id) setSelectedFlockId(null);
-      } catch (error) { console.error("Silme hatası:", error); }
+    
+    if (!confirm("DİKKAT: Bu sürüyü ve ona ait TÜM GÜNLÜK VERİM KAYITLARINI silmek üzeresiniz.\n\nBu işlem geri alınamaz. Devam edilsin mi?")) {
+      return;
+    }
+
+    try {
+      // 1. Önce bu sürüye ait günlük verileri bul
+      // Düşük performanslı cihazları yormamak için sorguyu sadece ID'ye göre yapıyoruz.
+      const logsQuery = query(collection(db, "daily_logs"), where("flockId", "==", id));
+      const snapshot = await getDocs(logsQuery);
+
+      // 2. Toplu Silme (Batch) İşlemi
+      // Firestore batch limiti 500 işlemdir. Eğer 500 günden yaşlı bir sürü ise
+      // tek seferde silmek hata verir. Bu yüzden parçalara bölüyoruz (Chunking).
+      const batchSize = 500;
+      const docs = snapshot.docs;
+      
+      // Kayıtları 500'lük paketlere bölüp sırayla sil
+      for (let i = 0; i < docs.length; i += batchSize) {
+          const chunk = docs.slice(i, i + batchSize);
+          const batch = writeBatch(db);
+          
+          chunk.forEach(doc => {
+              batch.delete(doc.ref);
+          });
+          
+          await batch.commit(); // Paketi gönder ve bekle
+      }
+
+      // 3. Günlükler temizlendi, şimdi sürünün kendisini sil
+      await deleteDoc(doc(db, "flocks", id));
+
+      if (selectedFlockId === id) setSelectedFlockId(null);
+      
+    } catch (error) { 
+      console.error("Silme hatası:", error); 
+      alert("Sürü silinirken bir hata oluştu. Lütfen tekrar deneyin.");
     }
   };
 
