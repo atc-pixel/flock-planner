@@ -12,6 +12,7 @@ import { db } from '@/lib/firebase';
 import { ProductionToolbar } from './ProductionToolbar';
 import { ProductionTableHeader } from './ProductionTableHeader';
 import { ProductionTableRow } from './ProductionTableRow';
+import { ProductionCharts } from './ProductionCharts'; // YENİ
 import { TableRowData } from './types';
 
 interface ProductionTableProps {
@@ -24,10 +25,12 @@ export function ProductionTable({ flock }: ProductionTableProps) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   
+  // YENİ: Görünüm Modu (Tablo veya Grafik)
+  const [viewMode, setViewMode] = useState<'table' | 'chart'>('table');
+
   const [localInitialCount, setLocalInitialCount] = useState(flock.initialCount);
   const hasScrolledRef = useRef(false);
 
-  // Sürü değişirse state'i güncelle ve scroll kilidini aç
   useEffect(() => {
     setLocalInitialCount(flock.initialCount);
     hasScrolledRef.current = false; 
@@ -36,20 +39,17 @@ export function ProductionTable({ flock }: ProductionTableProps) {
   // 1. VERİ ÇEKME
   const fetchData = useCallback(async () => {
     setLoading(true);
-    
     const q = query(
       collection(db, "daily_logs"),
       where("flockId", "==", flock.id),
       orderBy("date", "asc")
     );
-    
     const snapshot = await getDocs(q);
     const logs = snapshot.docs.map(d => ({ 
       id: d.id, 
       ...d.data(), 
       date: d.data().date.toDate() 
     }));
-
     setAllLogs(logs); 
     setLoading(false);
   }, [flock.id]);
@@ -58,7 +58,7 @@ export function ProductionTable({ flock }: ProductionTableProps) {
     if (flock.id) fetchData();
   }, [fetchData]);
 
-  // 2. HESAPLAMA
+  // 2. HESAPLAMA (Tüm mantık aynı)
   useEffect(() => {
     const startDate = startOfDay(flock.hatchDate);
     const endDate = addDays(new Date(), 30); 
@@ -112,10 +112,10 @@ export function ProductionTable({ flock }: ProductionTableProps) {
     setRows(newRows);
   }, [allLogs, localInitialCount, flock]); 
 
-  // 3. IŞINLANMA (SCROLL) MANTIĞI
+  // 3. IŞINLANMA (Sadece Tablo Modunda)
   useLayoutEffect(() => {
-    if (!loading && rows.length > 0 && !hasScrolledRef.current) {
-        
+    // Sadece tablo modundaysa scroll yap
+    if (viewMode === 'table' && !loading && rows.length > 0 && !hasScrolledRef.current) {
         const targetDate = subDays(new Date(), 6);
         const targetId = `row-${format(targetDate, 'yyyy-MM-dd')}`;
         const element = document.getElementById(targetId);
@@ -132,12 +132,11 @@ export function ProductionTable({ flock }: ProductionTableProps) {
             }
         }
     }
-  }, [loading, rows]);
+  }, [loading, rows, viewMode]);
 
-  // Input Değişikliği
+  // Input ve Kayıt Fonksiyonları (Aynı)
   const handleInitialCountChange = (value: string) => {
-    const newVal = Number(value);
-    setLocalInitialCount(newVal); 
+    setLocalInitialCount(Number(value)); 
   };
 
   const handleCellChange = (index: number, field: keyof TableRowData, value: string) => {
@@ -189,10 +188,8 @@ export function ProductionTable({ flock }: ProductionTableProps) {
         }
 
         await batch.commit();
-        
         hasScrolledRef.current = false; 
         await fetchData(); 
-        
         alert("Başarıyla kaydedildi!");
     } catch (error) {
         console.error("Hata:", error);
@@ -211,29 +208,38 @@ export function ProductionTable({ flock }: ProductionTableProps) {
 
   return (
     <div className="bg-white rounded-xl shadow border border-slate-200 overflow-hidden flex flex-col h-full max-h-[80vh]">
-      {/* DÜZELTME: Hatalı proplar kaldırıldı */}
       <ProductionToolbar 
         onSave={handleSave}
         rows={rows}
         saving={saving}
+        viewMode={viewMode} // YENİ
+        setViewMode={setViewMode} // YENİ
       />
 
       <div className="overflow-auto grow scroll-smooth relative">
-        <table className="w-full text-xs text-left border-collapse border-spacing-0">
-          <ProductionTableHeader />
-          <tbody className="divide-y divide-slate-100">
-            {rows.map((row, idx) => (
-              <ProductionTableRow 
-                key={idx} 
-                index={idx}
-                row={row}
-                isFirstRow={idx === 0} 
-                onCellChange={handleCellChange}
-                onInitialCountChange={handleInitialCountChange}
-              />
-            ))}
-          </tbody>
-        </table>
+        
+        {/* KOŞULLU RENDER: Tablo veya Grafik */}
+        {viewMode === 'table' ? (
+            <table className="w-full text-xs text-left border-collapse border-spacing-0">
+            <ProductionTableHeader />
+            <tbody className="divide-y divide-slate-100">
+                {rows.map((row, idx) => (
+                <ProductionTableRow 
+                    key={idx} 
+                    index={idx}
+                    row={row}
+                    isFirstRow={idx === 0} 
+                    onCellChange={handleCellChange}
+                    onInitialCountChange={handleInitialCountChange}
+                />
+                ))}
+            </tbody>
+            </table>
+        ) : (
+            // Grafik Görünümü
+            <ProductionCharts data={rows} />
+        )}
+
       </div>
     </div>
   );

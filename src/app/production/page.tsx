@@ -8,7 +8,9 @@ import { collection, orderBy, query, onSnapshot } from 'firebase/firestore'; // 
 import { isAfter, isBefore, addWeeks } from 'date-fns';
 import { Flock, INITIAL_COOPS, calculateTimeline } from '@/lib/utils';
 import { Bird, AlertCircle, History, X, Home } from 'lucide-react';
+import { FileSpreadsheet } from 'lucide-react';
 
+import { ImportModal } from '@/components/production/ImportModal';
 import { Header } from '@/components/production/Header';
 import { ProductionTable } from '@/components/production/ProductionTable';
 
@@ -20,6 +22,8 @@ export default function ProductionPage() {
   const [selectedCoopId, setSelectedCoopId] = useState<string>(INITIAL_COOPS[0].id);
   const [selectedFlockId, setSelectedFlockId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -148,40 +152,53 @@ export default function ProductionPage() {
                         </div>
                     </div>
 
-                    {historyFlocks.length > 0 && (
-                        <div className="relative">
-                            <button 
-                                onClick={() => setShowHistory(!showHistory)}
-                                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-colors
-                                    ${showHistory ? 'bg-slate-800 text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}
-                                `}
-                            >
-                                {showHistory ? <X size={14} /> : <History size={14} />}
-                                {showHistory ? 'Kapat' : 'Geçmiş'}
-                            </button>
+                    <div className="flex gap-2">
+                        {/* YENİ IMPORT BUTONU */}
+                        <button 
+                            onClick={() => setIsImportOpen(true)}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold bg-white border border-slate-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 transition-colors shadow-sm"
+                            title="Excel'den Veri Al"
+                        >
+                            <FileSpreadsheet size={16} />
+                            <span className="hidden sm:inline">Excel Import</span>
+                        </button>
 
-                            {showHistory && (
-                                <div className="absolute top-10 right-0 w-64 bg-white rounded-xl shadow-xl border border-slate-200 z-50 p-2 animate-in fade-in slide-in-from-top-2">
-                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 px-2">Geçmiş Sürüler</div>
-                                    <div className="max-h-48 overflow-y-auto space-y-1">
-                                        {historyFlocks.map(f => (
-                                            <button
-                                                key={f.id}
-                                                onClick={() => {
-                                                    setSelectedFlockId(f.id);
-                                                    setShowHistory(false);
-                                                }}
-                                                className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-50 text-xs text-slate-600 hover:text-slate-900 flex justify-between items-center transition-colors"
-                                            >
-                                                <span className="font-bold">{f.name}</span>
-                                                <span className="opacity-50">{f.hatchDate?.toLocaleDateString('tr-TR')}</span>
-                                            </button>
-                                        ))}
+                        {/* MEVCUT GEÇMİŞ BUTONU */}
+                        {historyFlocks.length > 0 && (
+                            <div className="relative">
+                                <button 
+                                    onClick={() => setShowHistory(!showHistory)}
+                                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-colors
+                                        ${showHistory ? 'bg-slate-800 text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}
+                                    `}
+                                >
+                                    {showHistory ? <X size={14} /> : <History size={14} />}
+                                    {showHistory ? 'Kapat' : 'Geçmiş'}
+                                </button>
+
+                                {showHistory && (
+                                    <div className="absolute top-10 right-0 w-64 bg-white rounded-xl shadow-xl border border-slate-200 z-50 p-2 animate-in fade-in slide-in-from-top-2">
+                                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 px-2">Geçmiş Sürüler</div>
+                                        <div className="max-h-48 overflow-y-auto space-y-1">
+                                            {historyFlocks.map(f => (
+                                                <button
+                                                    key={f.id}
+                                                    onClick={() => {
+                                                        setSelectedFlockId(f.id);
+                                                        setShowHistory(false);
+                                                    }}
+                                                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-50 text-xs text-slate-600 hover:text-slate-900 flex justify-between items-center transition-colors"
+                                                >
+                                                    <span className="font-bold">{f.name}</span>
+                                                    <span className="opacity-50">{f.hatchDate?.toLocaleDateString('tr-TR')}</span>
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {selectedFlock.initialCount === 0 && (
@@ -210,6 +227,20 @@ export default function ProductionPage() {
                 </button>
             </div>
         )}
+
+        {/* IMPORT MODAL */}
+        {selectedFlock && (
+            <ImportModal 
+                isOpen={isImportOpen}
+                onClose={() => setIsImportOpen(false)}
+                flock={selectedFlock}
+                onSuccess={() => {
+                    // Sayfayı yenileyerek verilerin taze gelmesini sağla
+                    window.location.reload(); 
+                }}
+            />
+        )}
+
       </main>
     </div>
   );
