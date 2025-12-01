@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
 import { 
   eachDayOfInterval, isSameDay, startOfDay, addDays, subDays, format, differenceInWeeks 
 } from 'date-fns';
@@ -27,10 +27,10 @@ export function ProductionTable({ flock }: ProductionTableProps) {
   const [localInitialCount, setLocalInitialCount] = useState(flock.initialCount);
   const hasScrolledRef = useRef(false);
 
-  // Sürü değişirse state'i güncelle VE SCROLL KİLİDİNİ AÇ (YENİ)
+  // Sürü değişirse state'i güncelle ve scroll kilidini aç
   useEffect(() => {
     setLocalInitialCount(flock.initialCount);
-    hasScrolledRef.current = false; // Kilidi aç, yeni sürü yüklenince tekrar scroll yapsın
+    hasScrolledRef.current = false; 
   }, [flock.id, flock.initialCount]);
 
   // 1. VERİ ÇEKME
@@ -112,28 +112,23 @@ export function ProductionTable({ flock }: ProductionTableProps) {
     setRows(newRows);
   }, [allLogs, localInitialCount, flock]); 
 
-  // 3. SCROLL MANTIĞI (GÜNCELLENDİ: IŞINLANMA)
-  useEffect(() => {
-    // Sadece loading bittiyse, satırlar geldiyse VE bu sürü için henüz scroll yapılmadıysa çalış
+  // 3. IŞINLANMA (SCROLL) MANTIĞI
+  useLayoutEffect(() => {
     if (!loading && rows.length > 0 && !hasScrolledRef.current) {
         
-        // Hedef: Bugün - 6 gün
         const targetDate = subDays(new Date(), 6);
         const targetId = `row-${format(targetDate, 'yyyy-MM-dd')}`;
         const element = document.getElementById(targetId);
 
         if (element) {
-            // behavior: 'auto' -> Anında ışınlanma (scroll animasyonu yok)
-            // block: 'start' -> Hedef satırı (6 gün öncesi) ekranın en tepesine koy
             element.scrollIntoView({ behavior: 'auto', block: 'start' });
-            hasScrolledRef.current = true; // Kilitle
+            hasScrolledRef.current = true; 
         } else {
-            // Hedef tarih yoksa (Sürü çok yeniyse), Bugüne git
             const todayId = `row-${format(new Date(), 'yyyy-MM-dd')}`;
             const todayEl = document.getElementById(todayId);
             if (todayEl) {
                 todayEl.scrollIntoView({ behavior: 'auto', block: 'center' });
-                hasScrolledRef.current = true; // Kilitle
+                hasScrolledRef.current = true;
             }
         }
     }
@@ -195,7 +190,7 @@ export function ProductionTable({ flock }: ProductionTableProps) {
 
         await batch.commit();
         
-        hasScrolledRef.current = false; // Scroll kilidini aç (Yeniden odaklanması için)
+        hasScrolledRef.current = false; 
         await fetchData(); 
         
         alert("Başarıyla kaydedildi!");
@@ -216,14 +211,15 @@ export function ProductionTable({ flock }: ProductionTableProps) {
 
   return (
     <div className="bg-white rounded-xl shadow border border-slate-200 overflow-hidden flex flex-col h-full max-h-[80vh]">
+      {/* DÜZELTME: Hatalı proplar kaldırıldı */}
       <ProductionToolbar 
         onSave={handleSave}
         rows={rows}
         saving={saving}
       />
 
-      <div className="overflow-auto grow scroll-smooth">
-        <table className="w-full text-xs text-left border-collapse relative">
+      <div className="overflow-auto grow scroll-smooth relative">
+        <table className="w-full text-xs text-left border-collapse border-spacing-0">
           <ProductionTableHeader />
           <tbody className="divide-y divide-slate-100">
             {rows.map((row, idx) => (
