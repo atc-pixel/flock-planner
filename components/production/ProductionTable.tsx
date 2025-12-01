@@ -20,23 +20,23 @@ interface ProductionTableProps {
 
 export function ProductionTable({ flock }: ProductionTableProps) {
   const [rows, setRows] = useState<TableRowData[]>([]);
-  const [allLogs, setAllLogs] = useState<any[]>([]); // Ham veriyi hafızada tutuyoruz
+  const [allLogs, setAllLogs] = useState<any[]>([]); 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   
   const [localInitialCount, setLocalInitialCount] = useState(flock.initialCount);
   const hasScrolledRef = useRef(false);
 
-  // Sürü değişirse state'i güncelle
+  // Sürü değişirse state'i güncelle VE SCROLL KİLİDİNİ AÇ (YENİ)
   useEffect(() => {
     setLocalInitialCount(flock.initialCount);
-  }, [flock.initialCount]);
+    hasScrolledRef.current = false; // Kilidi aç, yeni sürü yüklenince tekrar scroll yapsın
+  }, [flock.id, flock.initialCount]);
 
-  // 1. VERİ ÇEKME FONKSİYONU (Sadece Veritabanından Okur)
+  // 1. VERİ ÇEKME
   const fetchData = useCallback(async () => {
     setLoading(true);
     
-    // Sürünün tüm loglarını çek
     const q = query(
       collection(db, "daily_logs"),
       where("flockId", "==", flock.id),
@@ -50,26 +50,22 @@ export function ProductionTable({ flock }: ProductionTableProps) {
       date: d.data().date.toDate() 
     }));
 
-    setAllLogs(logs); // Ham veriyi state'e at
+    setAllLogs(logs); 
     setLoading(false);
   }, [flock.id]);
 
-  // Sayfa ilk açıldığında veriyi çek
   useEffect(() => {
     if (flock.id) fetchData();
   }, [fetchData]);
 
-  // 2. HESAPLAMA (Local State veya Loglar değişince çalışır - Loading YOK)
+  // 2. HESAPLAMA
   useEffect(() => {
-    // Tarih aralığını belirle
     const startDate = startOfDay(flock.hatchDate);
     const endDate = addDays(new Date(), 30); 
     const days = eachDayOfInterval({ start: startDate, end: endDate });
 
-    // Hesaplama değişkeni
     let runningPopulation = localInitialCount || 0;
 
-    // Satırları oluştur
     const newRows: TableRowData[] = days.map(day => {
       const log = allLogs.find(l => isSameDay(l.date, day));
       const mortality = log?.mortality || 0;
@@ -114,38 +110,39 @@ export function ProductionTable({ flock }: ProductionTableProps) {
     });
 
     setRows(newRows);
-    
-    // Not: Burada setLoading(false) çağırmıyoruz, çünkü bu işlem senkron ve çok hızlı.
   }, [allLogs, localInitialCount, flock]); 
 
-  // 3. SCROLL MANTIĞI (Loading bitince çalışır)
+  // 3. SCROLL MANTIĞI (GÜNCELLENDİ: IŞINLANMA)
   useEffect(() => {
-    // Loading bittiğinde ve veri varsa ve henüz scroll yapılmadıysa
+    // Sadece loading bittiyse, satırlar geldiyse VE bu sürü için henüz scroll yapılmadıysa çalış
     if (!loading && rows.length > 0 && !hasScrolledRef.current) {
+        
+        // Hedef: Bugün - 6 gün
         const targetDate = subDays(new Date(), 6);
         const targetId = `row-${format(targetDate, 'yyyy-MM-dd')}`;
         const element = document.getElementById(targetId);
 
         if (element) {
+            // behavior: 'auto' -> Anında ışınlanma (scroll animasyonu yok)
+            // block: 'start' -> Hedef satırı (6 gün öncesi) ekranın en tepesine koy
             element.scrollIntoView({ behavior: 'auto', block: 'start' });
-            hasScrolledRef.current = true; // KİLİTLE
+            hasScrolledRef.current = true; // Kilitle
         } else {
+            // Hedef tarih yoksa (Sürü çok yeniyse), Bugüne git
             const todayId = `row-${format(new Date(), 'yyyy-MM-dd')}`;
             const todayEl = document.getElementById(todayId);
             if (todayEl) {
                 todayEl.scrollIntoView({ behavior: 'auto', block: 'center' });
-                hasScrolledRef.current = true; // KİLİTLE
+                hasScrolledRef.current = true; // Kilitle
             }
         }
     }
   }, [loading, rows]);
 
-  // Input Değişikliği (Sadece State Günceller)
+  // Input Değişikliği
   const handleInitialCountChange = (value: string) => {
     const newVal = Number(value);
     setLocalInitialCount(newVal); 
-    // Bu state değiştiği an 2. useEffect çalışır ve tabloyu anında günceller.
-    // Loading tetiklenmediği için tablo kaybolmaz.
   };
 
   const handleCellChange = (index: number, field: keyof TableRowData, value: string) => {
@@ -153,7 +150,6 @@ export function ProductionTable({ flock }: ProductionTableProps) {
     const newRows = [...rows];
     const row = { ...newRows[index], [field]: val, isDirty: true };
 
-    // Basit ön hesaplama (UI tepkisi için)
     const current = row.currentBirds;
     const eggs = row.eggCount;
     row.yield = current > 0 ? (eggs / current) * 100 : 0;
@@ -170,7 +166,6 @@ export function ProductionTable({ flock }: ProductionTableProps) {
         const batch = writeBatch(db);
         const changes = rows.filter(r => r.isDirty);
 
-        // Günlük Veriler
         changes.forEach(row => {
           const docData = {
               flockId: flock.id,
@@ -193,7 +188,6 @@ export function ProductionTable({ flock }: ProductionTableProps) {
           }
         });
 
-        // Başlangıç Sayısı
         if (localInitialCount !== flock.initialCount) {
             const flockRef = doc(db, "flocks", flock.id);
             batch.update(flockRef, { initialCount: localInitialCount });
@@ -201,9 +195,8 @@ export function ProductionTable({ flock }: ProductionTableProps) {
 
         await batch.commit();
         
-        // KAYIT SONRASI REFRESH VE SCROLL
-        hasScrolledRef.current = false; // Scroll kilidini aç
-        await fetchData(); // Veriyi sunucudan tekrar çek (Loading tetiklenir -> Scroll çalışır)
+        hasScrolledRef.current = false; // Scroll kilidini aç (Yeniden odaklanması için)
+        await fetchData(); 
         
         alert("Başarıyla kaydedildi!");
     } catch (error) {
