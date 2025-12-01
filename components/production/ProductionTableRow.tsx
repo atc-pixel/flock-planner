@@ -8,20 +8,18 @@ import { TableRowData } from './types';
 interface ProductionTableRowProps {
   row: TableRowData;
   index: number;
+  isFirstRow?: boolean; // YENİ
   onCellChange: (index: number, field: keyof TableRowData, value: string) => void;
+  onInitialCountChange?: (value: string) => void; // YENİ
 }
 
-export function ProductionTableRow({ row, index, onCellChange }: ProductionTableRowProps) {
+export function ProductionTableRow({ row, index, isFirstRow, onCellChange, onInitialCountChange }: ProductionTableRowProps) {
   const isFutureDate = isFuture(row.date);
   const isCurrentDay = isToday(row.date);
   
-  // Zebra Renklendirme
   const isEvenWeek = row.ageInWeeks % 2 === 0;
-
   const rowId = `row-${format(row.date, 'yyyy-MM-dd')}`;
 
-  // GÜNCELLEME: Yükseklik h-5 (20px) olarak ayarlandı.
-  // leading-none eklenerek metnin dikeyde ortalanması sağlandı.
   const inputClass = (bgColor: string, ringColor: string, textColor: string) => 
     `w-full h-5 text-center outline-none bg-transparent focus:${bgColor} focus:ring-inset focus:ring-1 focus:${ringColor} ${textColor} disabled:opacity-30 font-bold placeholder-transparent text-sm leading-none`;
 
@@ -34,7 +32,6 @@ export function ProductionTableRow({ row, index, onCellChange }: ProductionTable
 
   return (
     <>
-      {/* ÖZEL GÜN ETIKETI */}
       {row.specialEvent && (
         <tr className="bg-slate-50">
           <td colSpan={10} className="p-0 border-b border-slate-200">
@@ -49,7 +46,6 @@ export function ProductionTableRow({ row, index, onCellChange }: ProductionTable
         </tr>
       )}
 
-      {/* BUGÜN ÇİZGİSİ */}
       {isCurrentDay && (
         <tr>
             <td colSpan={10} className="p-0 border-t-2 border-red-500 relative h-0 z-20">
@@ -97,9 +93,21 @@ export function ProductionTableRow({ row, index, onCellChange }: ProductionTable
           />
         </td>
 
-        {/* Mevcut */}
-        <td className="p-0 border-r border-slate-200 text-center text-slate-600 font-mono select-none text-xs font-bold flex items-center justify-center h-5">
-          {row.currentBirds.toLocaleString()}
+        {/* MEVCUT (GÜNCELLENDİ: İlk satırda düzenlenebilir) */}
+        <td className="p-0 border-r border-slate-200">
+          {isFirstRow && onInitialCountChange ? (
+             <input 
+               type="number"
+               className={`${inputClass('bg-indigo-50', 'ring-indigo-300', 'text-indigo-700')} underline decoration-dashed decoration-indigo-300`}
+               value={row.currentBirds}
+               onChange={(e) => onInitialCountChange(e.target.value)}
+               title="Başlangıç mevcudunu buradan değiştirebilirsiniz"
+             />
+          ) : (
+             <div className="h-5 flex items-center justify-center font-mono select-none text-xs font-bold text-slate-600">
+               {row.currentBirds.toLocaleString()}
+             </div>
+          )}
         </td>
 
         {/* Toplam Yumurta */}

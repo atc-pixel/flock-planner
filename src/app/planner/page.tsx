@@ -8,24 +8,21 @@ import { useRouter } from 'next/navigation';
 // Firebase
 import { db, auth } from '@/lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { 
-  collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, 
-  writeBatch, query, where,  getDocs     // EKLENDİ
-} from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, writeBatch, query, where, getDocs } from 'firebase/firestore';
 
 import { Flock, INITIAL_COOPS, RULES, calculateTimeline } from '@/lib/utils';
 
-// IMPORT YOLLARI (Planner Klasöründen)
+// Planner Bileşenleri
 import { Header } from '@/components/planner/Header';
 import { DateSidebar } from '@/components/planner/DateSidebar';
 import { CoopColumn } from '@/components/planner/CoopColumn';
 import { SidebarRight } from '@/components/planner/SidebarRight';
-// YENİ IMPORT: Modal bileşeni
 import { NewFlockModal } from '@/components/planner/NewFlockModal';
 
-const HEADER_HEIGHT = 64; 
+// DÜZELTME: Sütun başlığı yüksekliği (h-10 = 40px) ile eşleşmeli
+const COLUMN_HEADER_HEIGHT = 40; 
 
-export default function FlockPlanner() { //
+export default function FlockPlanner() {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const router = useRouter();
@@ -34,14 +31,14 @@ export default function FlockPlanner() { //
   const [selectedFlockId, setSelectedFlockId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   
-  // YENİ STATE: Modal kontrolü için
+  // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [targetCoopId, setTargetCoopId] = useState<string | null>(null);
+  const [nextFlockNum, setNextFlockNum] = useState(1);
   
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
-
-  const [nextFlockNum, setNextFlockNum] = useState(1);
+  const hasScrolledRef = useRef(false); // Scroll kilidi
 
   // Auth Kontrolü
   useEffect(() => {
@@ -65,12 +62,10 @@ export default function FlockPlanner() { //
         return {
           id: doc.id,
           ...data,
-          // Firestore Timestamp -> Date dönüşümleri
           hatchDate: data.hatchDate?.toDate(),
           moltDate: data.moltDate?.toDate(),
           transferDate: data.transferDate?.toDate(),
           exitDate: data.exitDate?.toDate(),
-          // Yeni alanlar için varsayılan değerler (eski kayıtlarda hata vermemesi için)
           name: data.name || '',
           initialCount: data.initialCount || 0
         } as Flock;
@@ -80,7 +75,7 @@ export default function FlockPlanner() { //
     return () => unsubscribeData();
   }, [user]);
 
-  // Takvim Ayarları
+  // Takvim Ayarları (Başlangıç: 2023)
   const timelineStart = useMemo(() => startOfWeek(new Date(2023, 6, 1), { weekStartsOn: 1 }), []); 
   const minEndDate = useMemo(() => new Date(2027, 11, 31), []);
 
@@ -99,17 +94,22 @@ export default function FlockPlanner() { //
   }, [flocks, minEndDate, timelineStart]);
 
   const totalHeight = totalViewWeeks * RULES.pixelsPerWeek;
+  
+  // Bugün Çizgisi Konumu
   const daysUntilToday = differenceInCalendarDays(new Date(), timelineStart);
-  const todayTopPos = ((daysUntilToday / 7) * RULES.pixelsPerWeek) + HEADER_HEIGHT;
+  const todayTopPos = ((daysUntilToday / 7) * RULES.pixelsPerWeek) + COLUMN_HEADER_HEIGHT;
+  const weeksUntilToday = Math.floor(daysUntilToday / 7);
 
-  // Scroll to Today
+  // Otomatik Scroll (Bugün)
   useEffect(() => {
-    if (scrollContainerRef.current && flocks.length === 0 && !authLoading) {
-      const rawTopPos = (daysUntilToday / 7) * RULES.pixelsPerWeek;
-      const scrollPos = Math.max(0, rawTopPos - 300);
-      scrollContainerRef.current.scrollTop = scrollPos;
+    if (!authLoading && scrollContainerRef.current && !hasScrolledRef.current) {
+      if (todayTopPos > 0) {
+        const scrollPos = Math.max(0, todayTopPos - 300);
+        scrollContainerRef.current.scrollTop = scrollPos;
+        hasScrolledRef.current = true;
+      }
     }
-  }, [daysUntilToday, flocks.length, authLoading]);
+  }, [authLoading, todayTopPos]);
 
   // Hayalet Satır
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -117,13 +117,16 @@ export default function FlockPlanner() { //
     const rect = scrollContainerRef.current.getBoundingClientRect();
     const relativeY = e.clientY - rect.top + scrollContainerRef.current.scrollTop; 
     
-    if (relativeY < 0) {
+    // Header'ı hesaba kat
+    const yWithoutHeader = relativeY - COLUMN_HEADER_HEIGHT;
+
+    if (yWithoutHeader < 0) {
         highlightRef.current.style.display = 'none';
         return;
     }
 
-    const weekIndex = Math.floor(relativeY / RULES.pixelsPerWeek);
-    const topPos = (weekIndex * RULES.pixelsPerWeek);
+    const weekIndex = Math.floor(yWithoutHeader / RULES.pixelsPerWeek);
+    const topPos = (weekIndex * RULES.pixelsPerWeek) + COLUMN_HEADER_HEIGHT;
 
     highlightRef.current.style.display = 'block';
     highlightRef.current.style.transform = `translateY(${topPos}px)`;
@@ -133,71 +136,47 @@ export default function FlockPlanner() { //
     if (highlightRef.current) highlightRef.current.style.display = 'none';
   };
 
-  // --- SÜRÜ OLUŞTURMA (Drag End GÜNCELLENDİ) ---
+  // Sürü Oluşturma (Modal Açılır)
   const handleDragEnd = async (event: DragEndEvent) => {
     setActiveId(null);
     const { over, active } = event;
 
     if (over && active.id === 'new-flock-source') {
       const coopId = over.id as string;
-      
-      // Gelecek numarayı hesapla (Mevcut sürü sayısı + 1)
       setNextFlockNum(flocks.length + 1);
-      
       setTargetCoopId(coopId);
       setIsModalOpen(true);
     }
   };
 
-  // Modal Başarılı Olduğunda
   const handleModalSuccess = (newFlockId: string) => {
-    setSelectedFlockId(newFlockId); // Yeni oluşturulan sürüyü seç
+    setSelectedFlockId(newFlockId);
   };
 
-  // Sürü ve Bağlı Verileri Silme
+  // Silme (Batch & Cascade)
   const removeFlock = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    
-    if (!confirm("DİKKAT: Bu sürüyü ve ona ait TÜM GÜNLÜK VERİM KAYITLARINI silmek üzeresiniz.\n\nBu işlem geri alınamaz. Devam edilsin mi?")) {
-      return;
-    }
+    if (!confirm("DİKKAT: Bu sürüyü ve tüm verim kayıtlarını silmek üzeresiniz. Devam edilsin mi?")) return;
 
     try {
-      // 1. Önce bu sürüye ait günlük verileri bul
-      // Düşük performanslı cihazları yormamak için sorguyu sadece ID'ye göre yapıyoruz.
       const logsQuery = query(collection(db, "daily_logs"), where("flockId", "==", id));
       const snapshot = await getDocs(logsQuery);
-
-      // 2. Toplu Silme (Batch) İşlemi
-      // Firestore batch limiti 500 işlemdir. Eğer 500 günden yaşlı bir sürü ise
-      // tek seferde silmek hata verir. Bu yüzden parçalara bölüyoruz (Chunking).
       const batchSize = 500;
       const docs = snapshot.docs;
       
-      // Kayıtları 500'lük paketlere bölüp sırayla sil
       for (let i = 0; i < docs.length; i += batchSize) {
           const chunk = docs.slice(i, i + batchSize);
           const batch = writeBatch(db);
-          
-          chunk.forEach(doc => {
-              batch.delete(doc.ref);
-          });
-          
-          await batch.commit(); // Paketi gönder ve bekle
+          chunk.forEach(d => batch.delete(d.ref));
+          await batch.commit();
       }
 
-      // 3. Günlükler temizlendi, şimdi sürünün kendisini sil
       await deleteDoc(doc(db, "flocks", id));
-
       if (selectedFlockId === id) setSelectedFlockId(null);
-      
-    } catch (error) { 
-      console.error("Silme hatası:", error); 
-      alert("Sürü silinirken bir hata oluştu. Lütfen tekrar deneyin.");
-    }
+    } catch (error) { console.error("Silme hatası:", error); }
   };
 
-  // Sürü Güncelleme
+  // Güncelleme
   const updateFlock = async (updatedFlock: Flock) => {
     try {
       const flockRef = doc(db, "flocks", updatedFlock.id);
@@ -241,7 +220,8 @@ export default function FlockPlanner() { //
 
             <DateSidebar timelineStart={timelineStart} totalWeeks={totalViewWeeks} />
             
-            <div className="flex grow relative" style={{ minHeight: `${totalHeight}px` }}>
+            <div className="flex grow relative" style={{ minHeight: `${totalHeight + COLUMN_HEADER_HEIGHT}px` }}>
+              {/* Sütunları Render Et */}
               {INITIAL_COOPS.map((coop) => (
                 <CoopColumn
                   key={coop.id}
@@ -256,6 +236,18 @@ export default function FlockPlanner() { //
                   onUpdateFlock={updateFlock}
                 />
               ))}
+
+              {/* DÜZELTME: BUGÜN ÇİZGİSİ EN SONA (ÜSTE) EKLENDİ */}
+              {weeksUntilToday >= 0 && weeksUntilToday < totalViewWeeks && (
+                <div 
+                   className="absolute left-0 right-0 border-t-2 border-red-600 z-[60] pointer-events-none shadow-sm"
+                   style={{ top: `${todayTopPos}px` }} 
+                >
+                    <div className="absolute right-0 -top-2.5 bg-red-600 text-white text-[9px] px-1.5 py-0.5 rounded-l font-bold shadow-md">
+                        BUGÜN
+                    </div>
+                </div>
+              )}
             </div>
           </div>
           
@@ -265,7 +257,6 @@ export default function FlockPlanner() { //
           />
         </div>
 
-        {/* MODAL BİLEŞENİNE YENİ PROP EKLENDİ: nextFlockNumber */}
         <NewFlockModal 
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
