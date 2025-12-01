@@ -240,7 +240,7 @@ export default function FlockPlanner() {
               {/* DÜZELTME: BUGÜN ÇİZGİSİ EN SONA (ÜSTE) EKLENDİ */}
               {weeksUntilToday >= 0 && weeksUntilToday < totalViewWeeks && (
                 <div 
-                   className="absolute left-0 right-0 border-t-2 border-red-600 z-[60] pointer-events-none shadow-sm"
+                   className="absolute left-0 right-0 border-t-2 border-red-600 z-60 pointer-events-none shadow-sm"
                    style={{ top: `${todayTopPos}px` }} 
                 >
                     <div className="absolute right-0 -top-2.5 bg-red-600 text-white text-[9px] px-1.5 py-0.5 rounded-l font-bold shadow-md">
