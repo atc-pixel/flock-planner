@@ -145,7 +145,7 @@ export function ImportModal({ isOpen, onClose, flock, onSuccess }: ImportModalPr
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
+    <div className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[90vh]">
         
         <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center shrink-0">
