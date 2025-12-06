@@ -106,6 +106,16 @@ export async function getInstantWaterFromFirestore(
   return result;
 }
 
+export async function getSimpleDailyTotalsFromFirestore(
+  coopId: string,
+  days: number = 7
+): Promise<{ date: string; totalLiters: number }[]> {
+  const detailed = await getDailyWaterFromFirestore(coopId, days);
+  return detailed.map((d) => ({
+    date: d.date,
+    totalLiters: d.total,
+  }));
+}
 
 // ... InstantWaterPoint, DailyWaterPoint, batteryIndexToKey, getInstantWaterFromFirestore aynen kalsın
 
@@ -122,6 +132,7 @@ export async function getDailyWaterFromFirestore(
   coopId: string,
   days: number = 7
 ): Promise<DailyWaterPoint[]> {
+  
   // 1) Local time'a göre tarih sınırlarını belirle
   const now = new Date();
   const todayMidnight = new Date(

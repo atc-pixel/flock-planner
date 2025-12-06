@@ -2,36 +2,59 @@
 import { InfluxDB } from "@influxdata/influxdb-client";
 
 /**
- * 1) Ortak env değişkenleri
+ * 1) Env değişkenleri
  */
 const INFLUX_URL = process.env.INFLUX_URL;
 const INFLUX_TOKEN = process.env.INFLUX_TOKEN;
 const INFLUX_ORG = process.env.INFLUX_ORG;
 const INFLUX_BUCKET = process.env.INFLUX_BUCKET;
 
-if (!INFLUX_URL || !INFLUX_TOKEN || !INFLUX_ORG || !INFLUX_BUCKET) {
-  throw new Error(
-    "Influx env variables are missing. Please set INFLUX_URL, INFLUX_TOKEN, INFLUX_ORG, INFLUX_BUCKET in .env.local"
-  );
-}
-
-// TypeScript için netleştirelim
-const ORG = INFLUX_ORG as string;
-const BUCKET = INFLUX_BUCKET as string;
+// Boş da olsa sabit string olsun, query içinde kullanacağız
+const ORG = (INFLUX_ORG || "") as string;
+const BUCKET = (INFLUX_BUCKET || "") as string;
 
 /**
- * 2) Senin su sayaçlarına özel sabitler
+ * 2) Lazy Influx client
  *
- * Grafana'dan gelen query:
+ * - Build sırasında import edilince çalışmaz, env check etmez.
+ * - Sadece getInflux() çağrıldığında env'leri kontrol eder ve client oluşturur.
+ * - Bu sayede Vercel build env'sizken patlamaz.
+ */
+
+let _influx: InfluxDB | null = null;
+
+function getInflux(): InfluxDB {
+  if (!_influx) {
+    if (!INFLUX_URL || !INFLUX_TOKEN || !INFLUX_ORG || !INFLUX_BUCKET) {
+      throw new Error(
+        "Influx env variables missing. Please set INFLUX_URL, INFLUX_TOKEN, INFLUX_ORG, INFLUX_BUCKET on the server."
+      );
+    }
+    _influx = new InfluxDB({
+      url: INFLUX_URL,
+      token: INFLUX_TOKEN,
+    });
+  }
+  return _influx;
+}
+
+/**
+ * 3) Su sayaçlarına özel sabitler
+ *
+ * Grafana'daki örnek flux:
  *
  * from(bucket: "kumesShieldV4Sensors")
+ *   |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
  *   |> filter(fn: (r) => r["device_name"] == "MKR1310-K1-WaterMeter")
  *   |> filter(fn: (r) => r["_measurement"] == "device_frmpayload_data_WaterMeter1")
  *   |> filter(fn: (r) => r["_field"] == "value")
  *   |> aggregateWindow(every: 10m, fn: mean)
+ *   |> yield(name: "last")
+ *
+ * Biz burada 4 ölçüm için aynı mantığı kullanıyoruz.
  */
 
-const WATER_FIELD = "value"; // 10 dk'da geçen litre
+const WATER_FIELD = "value";
 
 // 4 batarya için measurement isimleri
 const WATER_MEASUREMENT_1 = "device_frmpayload_data_WaterMeter1";
@@ -57,7 +80,7 @@ const DEVICE_NAME_BY_COOP: Record<string, string> = {
 };
 
 /**
- * Measurement -> hangi batarya?
+ * Measurement -> hangi batarya (1–4)
  */
 function getBatteryIndex(
   measurement: string
@@ -77,24 +100,26 @@ function getBatteryIndex(
 }
 
 /**
- * 3) Influx client
+ * coopId -> device_name
  */
-const influx = new InfluxDB({
-  url: INFLUX_URL,
-  token: INFLUX_TOKEN,
-});
+function resolveDeviceName(coopId: string): string {
+  return DEVICE_NAME_BY_COOP[coopId] ?? DEVICE_NAME_T1;
+}
 
 /**
  * 4) Tipler
  */
 
-// Sadece toplam isteyen basit günlük tip
-export type DailyWaterPoint = {
-  date: string;        // "YYYY-MM-DD"
-  totalLiters: number; // o gün tüm bataryaların toplamı
+// 10 dakikalık seri (4 batarya)
+export type MultiBatteryInstantPoint = {
+  time: string; // Influx _time, ISO string
+  battery1: number;
+  battery2: number;
+  battery3: number;
+  battery4: number;
 };
 
-// 4 batarya + toplam için günlük özet
+// Günlük toplamlar için (şu an sync-water tarafında kullanmıyoruz ama hazır dursun)
 export type MultiBatteryDailyPoint = {
   date: string; // "YYYY-MM-DD"
   battery1: number;
@@ -104,50 +129,42 @@ export type MultiBatteryDailyPoint = {
   total: number;
 };
 
-// 10 dakikalık anlık seri (4 batarya)
-export type MultiBatteryInstantPoint = {
-  time: string; // ISO string (Influx _time)
-  battery1: number;
-  battery2: number;
-  battery3: number;
-  battery4: number;
+export type DailyWaterPoint = {
+  date: string;
+  totalLiters: number;
 };
 
 /**
- * 5) Yardımcı: coopId -> device_name
- */
-function resolveDeviceName(coopId: string): string {
-  return DEVICE_NAME_BY_COOP[coopId] ?? DEVICE_NAME_T1;
-}
-
-/**
- * 6) 10 dakikalık seri:
+ * 5) Ana fonksiyon: çok bataryalı anlık su tüketimi
  *
- * Aynı device altındaki 4 batarya için, son X saatlik
- * 10 dakikalık ortalama tüketim serisini döner.
+ * Influx'tan son `hours` saat için:
+ *   - device_name = coopId'ye göre
+ *   - measurement ∈ [WaterMeter1..4]
+ *   - field = "value"
+ *   - 10 dakikalık pencerede SUM alır (fn: sum)
+ *
+ * Sonuç: Her 10 dakikalık slot için 4 bataryanın değeri
  */
 export async function getMultiBatteryInstantWater(
   coopId: string,
   hours: number = 24
 ): Promise<MultiBatteryInstantPoint[]> {
   const deviceName = resolveDeviceName(coopId);
-  const queryApi = influx.getQueryApi(ORG);
+  const queryApi = getInflux().getQueryApi(ORG);
 
   const measurementsFilter = WATER_MEASUREMENTS
     .map((m) => `r["_measurement"] == "${m}"`)
     .join(" or ");
 
-  // lib/influx.ts içindeki getMultiBatteryInstantWater fonksiyonu içinde:
   const fluxQuery = `
-  from(bucket: "${BUCKET}")
-    |> range(start: -${hours}h)
-    |> filter(fn: (r) => r["device_name"] == "${deviceName}")
-    |> filter(fn: (r) => ${measurementsFilter})
-    |> filter(fn: (r) => r["_field"] == "${WATER_FIELD}")
-    |> aggregateWindow(every: 10m, fn: sum, createEmpty: false)
-    |> yield(name: "10m_sum")
-  `;
-
+from(bucket: "${BUCKET}")
+  |> range(start: -${hours}h)
+  |> filter(fn: (r) => r["device_name"] == "${deviceName}")
+  |> filter(fn: (r) => ${measurementsFilter})
+  |> filter(fn: (r) => r["_field"] == "${WATER_FIELD}")
+  |> aggregateWindow(every: 10m, fn: sum, createEmpty: false)
+  |> yield(name: "10m_sum")
+`;
 
   try {
     const rows = (await queryApi.collectRows(fluxQuery)) as any[];
@@ -198,25 +215,19 @@ export async function getMultiBatteryInstantWater(
 }
 
 /**
- * 7) Günlük toplamlar (4 batarya + toplam):
+ * 6) (Opsiyonel) Günlük toplamları JS tarafında hesaplamak istersen:
  *
- * - Influx'tan 10 dakikalık seriyi alır (son days * 24 saat)
- * - JS tarafında LOCAL güne göre (server timezone) gruplayarak
- *   günlük toplamları hesaplar.
- *
- * Böylece:
- * - aggregateWindow(every:1d) + timezone kayması derdi yok
- * - Anlık grafikte gördüğün ile birebir tutarlı gün toplamları elde edilir
+ * Şu fonksiyonlar Influx'tan değil, getMultiBatteryInstantWater çıktısından türetilir.
+ * Şu an prod'da günlük toplamları Firestore'dan çözüyoruz, ama bunlar kalsın.
  */
+
 export async function getMultiBatteryDailyWater(
   coopId: string,
   days: number = 7
 ): Promise<MultiBatteryDailyPoint[]> {
-  // 1) Son days gün için 10 dk verisini al
   const hours = days * 24;
   const instant = await getMultiBatteryInstantWater(coopId, hours);
 
-  // 2) Local güne göre grupla: YYYY-MM-DD
   const byDate = new Map<string, MultiBatteryDailyPoint>();
 
   for (const p of instant) {
@@ -256,13 +267,9 @@ export async function getMultiBatteryDailyWater(
     byDate.set(dateKey, entry);
   }
 
-  // 3) Map -> array
   let result = Array.from(byDate.values());
-
-  // 4) Tarihe göre sırala
   result.sort((a, b) => (a.date < b.date ? -1 : 1));
 
-  // 5) Son `days` günü bırak (eski günler varsa kırp)
   if (result.length > days) {
     result = result.slice(result.length - days);
   }
@@ -270,24 +277,13 @@ export async function getMultiBatteryDailyWater(
   return result;
 }
 
-/**
- * 8) Sadece toplam isteyenler için basit sarıcı:
- *
- * getMultiBatteryDailyWater çıktısından:
- *  { date, totalLiters } array'i üretir.
- *
- * Şu anda /coop-status/api/daily-water endpoint'i bunu kullanabilir.
- */
 export async function getDailyWater(
   coopId: string,
   days: number = 7
 ): Promise<DailyWaterPoint[]> {
   const multi = await getMultiBatteryDailyWater(coopId, days);
-
-  const result: DailyWaterPoint[] = multi.map((d) => ({
+  return multi.map((d) => ({
     date: d.date,
     totalLiters: d.total,
   }));
-
-  return result;
 }
