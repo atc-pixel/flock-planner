@@ -1,6 +1,7 @@
 // src/app/coop-status/page.tsx
 import { CoopWaterOverviewChart } from "@/components/coop-status/CoopWaterOverviewChart";
 import { CoopWaterInstantChart } from "@/components/coop-status/CoopWaterInstantChart";
+import { CoopWaterInstantTable } from "@/components/coop-status/CoopWaterInstantTable";
 
 export default function CoopStatusPage() {
   return (
@@ -39,6 +40,26 @@ export default function CoopStatusPage() {
         </div>
         <CoopWaterInstantChart coopId="T1" hours={24} />
       </section>
+
+            {/* Anlık tüketim grafiği + tablo */}
+      <section className="rounded-xl border bg-card p-4 shadow-sm">
+        <div className="mb-3">
+          <h2 className="text-sm font-medium">
+            Anlık Su Tüketim Geçmişi – Batarya Bazında (T1)
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            Son 24 saatte, 10 dakikalık aralıklarla her bataryanın tüketimi
+            (L/10dk). Aşağıda aynı veriyi tablo halinde görebilirsin.
+          </p>
+        </div>
+
+        {/* Grafik */}
+        <CoopWaterInstantChart coopId="T1" hours={24} />
+
+        {/* Tablo (grafikle aynı endpoint verisi) */}
+        <CoopWaterInstantTable coopId="T1" hours={24} />
+      </section>
+
     </div>
   );
 }

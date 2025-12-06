@@ -137,15 +137,17 @@ export async function getMultiBatteryInstantWater(
     .map((m) => `r["_measurement"] == "${m}"`)
     .join(" or ");
 
+  // lib/influx.ts içindeki getMultiBatteryInstantWater fonksiyonu içinde:
   const fluxQuery = `
-from(bucket: "${BUCKET}")
-  |> range(start: -${hours}h)
-  |> filter(fn: (r) => r["device_name"] == "${deviceName}")
-  |> filter(fn: (r) => ${measurementsFilter})
-  |> filter(fn: (r) => r["_field"] == "${WATER_FIELD}")
-  |> aggregateWindow(every: 10m, fn: mean, createEmpty: false)
-  |> yield(name: "10m_mean")
-`;
+  from(bucket: "${BUCKET}")
+    |> range(start: -${hours}h)
+    |> filter(fn: (r) => r["device_name"] == "${deviceName}")
+    |> filter(fn: (r) => ${measurementsFilter})
+    |> filter(fn: (r) => r["_field"] == "${WATER_FIELD}")
+    |> aggregateWindow(every: 10m, fn: sum, createEmpty: false)
+    |> yield(name: "10m_sum")
+  `;
+
 
   try {
     const rows = (await queryApi.collectRows(fluxQuery)) as any[];
