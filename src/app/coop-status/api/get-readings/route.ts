@@ -1,22 +1,22 @@
 // src/app/coop-status/api/get-readings/route.ts
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
-import { collection, query, where, orderBy, getDocs, Timestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const coopId = searchParams.get('coopId') || 'T1';
-  const timeRange = searchParams.get('range') || '24h'; // '24h', '7d', '30d'
+  const timeRange = searchParams.get('range') || '24h'; // '24h', '7d'
 
-  // Tarih aralığını hesapla
   const now = new Date();
-  let startDate = new Date();
+  const startDate = new Date();
 
+  // Basit tarih filtreleme
   if (timeRange === '24h') startDate.setHours(now.getHours() - 24);
   else if (timeRange === '7d') startDate.setDate(now.getDate() - 7);
-  else if (timeRange === '30d') startDate.setDate(now.getDate() - 30);
-  else startDate.setHours(now.getHours() - 24); // Varsayılan
-
+  
   try {
     const q = query(
       collection(db, 'water_readings'),
@@ -27,11 +27,10 @@ export async function GET(request: Request) {
 
     const snapshot = await getDocs(q);
     
-    // Veriyi temiz formatta döndür
     const data = snapshot.docs.map(doc => {
       const d = doc.data();
       return {
-        // Timestamp'i ISO string'e çeviriyoruz ki frontend rahat kullansın
+        // Timestamp'i string olarak gönderiyoruz
         time: d.timestamp.toDate().toISOString(), 
         b1: d.b1,
         b2: d.b2,
