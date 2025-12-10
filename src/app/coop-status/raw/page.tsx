@@ -1,10 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { ArrowLeft, RefreshCw, AlertTriangle, Database } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { format } from 'date-fns';
+import { tr } from 'date-fns/locale';
 
-export default function RawDataPage() {
+// --- İÇ BİLEŞEN (Asıl Mantık Burada) ---
+function RawDataContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const coopId = searchParams.get('coopId') || 'T1';
@@ -40,7 +43,7 @@ export default function RawDataPage() {
     fetchData();
   }, [range, coopId]);
 
-  // YENİ: Toplamlar (b5 eklendi)
+  // Toplamlar (b5 dahil)
   const totals = useMemo(() => {
     const acc = { b1: 0, b2: 0, b3: 0, b4: 0, b5: 0, total: 0 };
     data.forEach(row => {
@@ -60,12 +63,11 @@ export default function RawDataPage() {
     return acc;
   }, [data]);
 
-  // T2 ise 5 kolon, değilse 4 kolon
+  // T2 ise veya b5 verisi varsa 5. kolonu göster
   const showBattery5 = coopId === 'T2' || totals.b5 > 0;
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 font-sans text-slate-800">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
         
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between bg-white p-4 rounded-xl border border-slate-200 shadow-sm gap-4">
@@ -178,8 +180,21 @@ export default function RawDataPage() {
             </table>
           </div>
         </div>
+    </div>
+  );
+}
 
-      </div>
+// --- ANA SAYFA BİLEŞENİ (Export Edilen) ---
+export default function RawDataPage() {
+  return (
+    <div className="min-h-screen bg-slate-50 p-6 font-sans text-slate-800">
+      <Suspense fallback={
+        <div className="flex h-screen items-center justify-center text-slate-500 gap-2">
+           <RefreshCw className="animate-spin" /> Yükleniyor...
+        </div>
+      }>
+        <RawDataContent />
+      </Suspense>
     </div>
   );
 }

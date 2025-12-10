@@ -224,7 +224,7 @@ export default function CoopStatusPage() {
             <div className="lg:col-span-2 space-y-6">
                 
                 {/* Günlük Toplam Kartı */}
-                <div className="bg-gradient-to-r from-purple-600 to-blue-600 p-6 rounded-2xl text-white shadow-lg flex justify-between items-center relative overflow-hidden">
+                <div className="bg-linear-to-r from-purple-600 to-blue-600 p-6 rounded-2xl text-white shadow-lg flex justify-between items-center relative overflow-hidden">
                     <div className="relative z-10">
                         <div className="text-purple-100 text-sm font-medium mb-1">Günlük Toplam Tüketim</div>
                         <div className="text-4xl font-black tracking-tight">{dailyTotal.toFixed(0)} <span className="text-xl font-medium opacity-80">Litre</span></div>
