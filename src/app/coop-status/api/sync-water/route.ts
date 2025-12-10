@@ -1,4 +1,3 @@
-// src/app/coop-status/api/sync-water/route.ts
 import { NextResponse } from 'next/server';
 import { getInflux, INFLUX_ORG, INFLUX_BUCKET } from '@/lib/influx';
 import { db } from '@/lib/firebase';
@@ -8,20 +7,28 @@ export const dynamic = "force-dynamic";
 
 const DEVICE_MAP: Record<string, string> = {
   'T1': 'MKR1310-K1-WaterMeter',
-  // T2, T3 ileride buraya eklenecek
+  'T2': 'MKR1310-K2-WaterMeter',
+  'T3': 'MKR1310-K3-WaterMeter',
+  'T4': 'MKR1310-K4-WaterMeter',
+  'T5': 'MKR1310-K5-WaterMeter',
+  'T6': 'MKR1310-K6-WaterMeter',
+  'C1': 'MKR1310-C1-WaterMeter',
+  'C2': 'MKR1310-C2-WaterMeter',
 };
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const coopId = searchParams.get('coopId') || 'T1';
-  const deviceName = DEVICE_MAP[coopId] || DEVICE_MAP['T1'];
+  
+  const deviceName = DEVICE_MAP[coopId];
+  if (!deviceName) {
+      return NextResponse.json({ success: false, error: "Geçersiz Kümes ID" }, { status: 400 });
+  }
 
   try {
-    // 1. META KONTROLÜ: En son nerede kaldık?
     const metaRef = doc(db, 'water_meta', coopId);
     const metaSnap = await getDoc(metaRef);
     
-    // DEĞİŞİKLİK 1: Varsayılan olarak son 7 günü (1 hafta) baz alıyoruz.
     const defaultStartDate = new Date();
     defaultStartDate.setDate(defaultStartDate.getDate() - 7);
     
@@ -32,25 +39,20 @@ export async function GET(request: Request) {
         const data = metaSnap.data();
         if (data.lastImportedTime) {
             const lastDate = data.lastImportedTime.toDate();
-            // Flux sorgusu için ISO string
             startRange = lastDate.toISOString(); 
             lastSyncTime = lastDate.getTime();
-            console.log(`[Sync] Son kayıt: ${startRange}. Sadece yeni veriler çekilecek.`);
+            console.log(`[Sync ${coopId}] Son kayıt: ${startRange}. Yeni veriler çekiliyor...`);
         }
     } else {
-        console.log(`[Sync] Meta kaydı yok. Son 7 gün taranacak.`);
+        console.log(`[Sync ${coopId}] İlk kurulum. Son 7 gün taranacak.`);
     }
 
-    // 2. INFLUX SORGUSU (HİZALANMIŞ RAW VERİ)
-    // DEĞİŞİKLİK 2 & 3: every: 5m ve fn: last
-    // - 5 dakikalık periyotlara bölüyoruz.
-    // - last ile o 5 dk içindeki en son veriyi alıp zamanı hizalıyoruz (örn: 10:03 -> 10:05).
-    // - Böylece 4 batarya aynı zamana denk gelip tek satırda birleşiyor.
+    // YENİ: [1-5] bataryayı kapsayan regex
     const query = `
       from(bucket: "${INFLUX_BUCKET}")
         |> range(start: time(v: "${startRange}"))
         |> filter(fn: (r) => r["device_name"] == "${deviceName}")
-        |> filter(fn: (r) => r["_measurement"] =~ /device_frmpayload_data_WaterMeter[1-4]/)
+        |> filter(fn: (r) => r["_measurement"] =~ /device_frmpayload_data_WaterMeter[1-5]/)
         |> filter(fn: (r) => r["_field"] == "value")
         |> aggregateWindow(every: 5m, fn: last, createEmpty: false)
         |> pivot(rowKey:["_time"], columnKey: ["_measurement"], valueColumn: "_value")
@@ -75,16 +77,13 @@ export async function GET(request: Request) {
       });
     });
 
-    // Mükerrer veri kontrolü (Influx bazen sınır değerini tekrar yollar)
     const newRows = rows.filter(r => new Date(r._time).getTime() > lastSyncTime);
 
     if (newRows.length === 0) {
       return NextResponse.json({ message: "Sistem güncel, yeni veri yok." });
     }
 
-    console.log(`[Sync] ${newRows.length} adet hizalanmış (5dk) yeni veri bulundu.`);
-
-    // 3. FIRESTORE'A YAZMA
+    // YENİ: Batarya 5'i de işleme dahil ediyoruz
     const BATCH_SIZE = 450;
     let totalWritten = 0;
     let maxTime = lastSyncTime;
@@ -104,15 +103,17 @@ export async function GET(request: Request) {
             const b2 = Number(row['device_frmpayload_data_WaterMeter2'] || 0);
             const b3 = Number(row['device_frmpayload_data_WaterMeter3'] || 0);
             const b4 = Number(row['device_frmpayload_data_WaterMeter4'] || 0);
+            // Batarya 5
+            const b5 = Number(row['device_frmpayload_data_WaterMeter5'] || 0);
             
-            // Tek Timestamp, 4 Batarya verisi
             const docId = `${coopId}_${timestamp.toISOString()}`;
             const docRef = doc(db, 'water_readings', docId);
 
+            // Veritabanına b5'i de ekliyoruz
             batch.set(docRef, {
                 coopId,
                 timestamp: timestamp,
-                b1, b2, b3, b4
+                b1, b2, b3, b4, b5
             }, { merge: true });
         });
 
@@ -120,7 +121,6 @@ export async function GET(request: Request) {
         totalWritten += chunk.length;
     }
 
-    // 4. META GÜNCELLEME
     if (totalWritten > 0) {
         await setDoc(metaRef, {
             lastImportedTime: Timestamp.fromMillis(maxTime),
@@ -131,7 +131,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ 
       success: true, 
       importedCount: totalWritten,
-      message: `${totalWritten} yeni kayıt (5dk aralıklı) başarıyla eklendi.` 
+      message: `${totalWritten} yeni kayıt eklendi.` 
     });
 
   } catch (error: any) {

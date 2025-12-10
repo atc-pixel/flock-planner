@@ -1,4 +1,3 @@
-// src/app/coop-status/api/get-readings/route.ts
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, query, where, orderBy, getDocs, Timestamp } from 'firebase/firestore';
@@ -16,7 +15,6 @@ export async function GET(request: Request) {
   let endDate: Date;
   const TR_OFFSET_HOURS = 3; 
 
-  // Tarih Mantığı
   if (dateParam) {
     startDate = new Date(dateParam); 
     startDate.setUTCHours(0 - TR_OFFSET_HOURS, 0, 0, 0);
@@ -51,8 +49,8 @@ export async function GET(request: Request) {
     
     const data = snapshot.docs.map(doc => {
       const d = doc.data();
-      // ÖNEMLİ: Veritabanında total yok, burada anlık hesaplıyoruz.
-      const calculatedTotal = (d.b1 || 0) + (d.b2 || 0) + (d.b3 || 0) + (d.b4 || 0);
+      // YENİ: Toplama b5 dahil ediliyor
+      const calculatedTotal = (d.b1 || 0) + (d.b2 || 0) + (d.b3 || 0) + (d.b4 || 0) + (d.b5 || 0);
 
       return {
         time: d.timestamp.toDate().toISOString(), 
@@ -60,7 +58,8 @@ export async function GET(request: Request) {
         b2: d.b2,
         b3: d.b3,
         b4: d.b4,
-        total: calculatedTotal // Frontend bu alanı bekliyor
+        b5: d.b5, // YENİ
+        total: calculatedTotal
       };
     });
 

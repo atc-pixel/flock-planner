@@ -1,64 +1,59 @@
 import { addWeeks } from 'date-fns';
 
-
 // --- TİPLER ---
-export type Coop = { id: string; name: string; };
+// type özelliğini ekledik (UI'da ikon ve renk değişimi için)
+export type Coop = { id: string; name: string; type: 'hen' | 'chick' };
 
 export type Flock = { 
   id: string; 
-  name: string;         // YENİ: Sürü Kodu/Adı (Örn: #05)
+  name: string;
   coopId: string; 
   hatchDate: Date; 
-  initialCount: number; // YENİ: Başlangıçtaki hayvan sayısı
+  initialCount: number;
   isMolting: boolean; 
   lane: 0 | 1; 
-  
-  // OPSİYONEL TARİHLER
-  moltDate?: Date;      // Molting Başlangıç
-  transferDate?: Date;  // Özel Transfer
-  exitDate?: Date;      // Özel Çıkış (Kesim)
+  moltDate?: Date;
+  transferDate?: Date;
+  exitDate?: Date;
 };
 
 // --- SABİTLER ---
+// 8 Kümes Tanımı (6 Tavuk, 2 Civciv)
 export const INITIAL_COOPS: Coop[] = [
-  { id: 'T1', name: 'Kümes T1' }, { id: 'T2', name: 'Kümes T2' },
-  { id: 'T3', name: 'Kümes T3' }, { id: 'T4', name: 'Kümes T4' },
-  { id: 'T5', name: 'Kümes T5' }, { id: 'T6', name: 'Kümes T6' },
+  // Tavuk Kümesleri (K)
+  { id: 'T1', name: 'Kümes T1', type: 'hen' }, 
+  { id: 'T2', name: 'Kümes T2', type: 'hen' },
+  { id: 'T3', name: 'Kümes T3', type: 'hen' }, 
+  { id: 'T4', name: 'Kümes T4', type: 'hen' },
+  { id: 'T5', name: 'Kümes T5', type: 'hen' }, 
+  { id: 'T6', name: 'Kümes T6', type: 'hen' },
+  // Civciv Kümesleri (C)
+  { id: 'C1', name: 'Civciv C1', type: 'chick' }, 
+  { id: 'C2', name: 'Civciv C2', type: 'chick' },
 ];
 
 export const RULES = {
-  // GÜNCELLEME: 14-18. Haftalar arası (14. haftanın başı = 13 hafta bitmiş demektir)
   transferRangeStart: 13, 
-  // GÜNCELLEME: 14, 15, 16, 17, 18 (Toplam 5 hafta)
   transferRangeDuration: 5, 
-  
   peakMaxWeek: 24,
-  
-  // Varsayılan Süreler
   stdExitWeek: 90,       
   moltingExitWeek: 125,  
-  
   sanitationWeeks: 3,
   pixelsPerWeek: 24,
 };
 
 export type ProductionLog = {
   id?: string;
-  flockId: string;      // Ana referansımız Sürü ID'si
-  coopId: string;       // Tarihçesi için tutuyoruz
-  date: Date;           // Timestamp
-  
-  // Girdiler
-  mortality: number;    // Ölü
-  cull: number;         // Iskarta/Kesim (Opsiyonel ama gerekli olabilir)
-  eggCount: number;     // Toplam Üretilen Yumurta
-  brokenEggCount: number; // Hasarlı
-  dirtyEggCount: number;  // Kirli
-  
-  // Tüketim
-  feedConsumed: number; // kg
-  waterConsumed: number; // litre
-  
+  flockId: string;
+  coopId: string;
+  date: Date;
+  mortality: number;
+  cull: number; // Iskarta/Kesim
+  eggCount: number;
+  brokenEggCount: number;
+  dirtyEggCount: number;
+  feedConsumed: number;
+  waterConsumed: number;
   updatedAt?: Date;
 };
 
@@ -66,15 +61,12 @@ export type ProductionLog = {
 export const calculateTimeline = (flock: Flock) => {
   if (!flock.hatchDate) return null;
 
-  // 1. Transfer
   const transfer = flock.transferDate 
     ? flock.transferDate 
     : addWeeks(flock.hatchDate, RULES.transferRangeStart);
 
-  // 2. Pik
   const peak = addWeeks(flock.hatchDate, RULES.peakMaxWeek);
   
-  // 3. Çıkış (Exit)
   let exit: Date;
   if (flock.exitDate) {
     exit = flock.exitDate;
@@ -83,7 +75,6 @@ export const calculateTimeline = (flock: Flock) => {
     exit = addWeeks(flock.hatchDate, exitWeek);
   }
   
-  // 4. Sanitasyon
   const sanWeeks = RULES.sanitationWeeks || 3; 
   const sanitationEnd = addWeeks(exit, sanWeeks);
   

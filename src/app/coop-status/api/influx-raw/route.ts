@@ -1,11 +1,18 @@
-// src/app/coop-status/api/influx-raw/route.ts
 import { NextResponse } from 'next/server';
 import { getInflux, INFLUX_ORG, INFLUX_BUCKET } from '@/lib/influx';
 
 export const dynamic = "force-dynamic";
 
+// Cihaz Haritası
 const DEVICE_MAP: Record<string, string> = {
   'T1': 'MKR1310-K1-WaterMeter',
+  'T2': 'MKR1310-K2-WaterMeter',
+  'T3': 'MKR1310-K3-WaterMeter',
+  'T4': 'MKR1310-K4-WaterMeter',
+  'T5': 'MKR1310-K5-WaterMeter',
+  'T6': 'MKR1310-K6-WaterMeter',
+  'C1': 'MKR1310-C1-WaterMeter',
+  'C2': 'MKR1310-C2-WaterMeter',
 };
 
 export async function GET(request: Request) {
@@ -13,13 +20,16 @@ export async function GET(request: Request) {
   const coopId = searchParams.get('coopId') || 'T1';
   const range = searchParams.get('range') || '6h'; 
 
-  const deviceName = DEVICE_MAP[coopId] || DEVICE_MAP['T1'];
+  const deviceName = DEVICE_MAP[coopId];
+  if (!deviceName) {
+    return NextResponse.json({ success: false, error: "Bilinmeyen Kümes ID" }, { status: 400 });
+  }
 
-  // Limit'i 5000 yaptık ki geniş aralıklarda toplam doğru çıksın.
+  // YENİ: [1-5]
   const query = `
     from(bucket: "${INFLUX_BUCKET}")
       |> range(start: -${range})
-      |> filter(fn: (r) => r["_measurement"] =~ /device_frmpayload_data_WaterMeter[1-4]/)
+      |> filter(fn: (r) => r["_measurement"] =~ /device_frmpayload_data_WaterMeter[1-5]/)
       |> filter(fn: (r) => r["device_name"] == "${deviceName}")
       |> filter(fn: (r) => r["_field"] == "value")
       |> pivot(rowKey:["_time"], columnKey: ["_measurement"], valueColumn: "_value")

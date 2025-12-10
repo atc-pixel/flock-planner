@@ -4,11 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { db, auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, orderBy, query, onSnapshot } from 'firebase/firestore'; // onSnapshot eklendi
+import { collection, orderBy, query, onSnapshot } from 'firebase/firestore'; 
 import { isAfter, isBefore, addWeeks } from 'date-fns';
 import { Flock, INITIAL_COOPS, calculateTimeline } from '@/lib/utils';
-import { Bird, AlertCircle, History, X, Home } from 'lucide-react';
-import { FileSpreadsheet } from 'lucide-react';
+import { Bird, AlertCircle, History, X, Home, FileSpreadsheet } from 'lucide-react';
 
 import { ImportModal } from '@/components/production/ImportModal';
 import { Header } from '@/components/production/Header';
@@ -19,7 +18,10 @@ export default function ProductionPage() {
   const [loading, setLoading] = useState(true);
   const [allFlocks, setAllFlocks] = useState<Flock[]>([]);
   
-  const [selectedCoopId, setSelectedCoopId] = useState<string>(INITIAL_COOPS[0].id);
+  // YENİ: Sadece 'hen' (Tavuk) tipi kümesleri filtrele
+  const productionCoops = INITIAL_COOPS.filter(c => c.type === 'hen');
+
+  const [selectedCoopId, setSelectedCoopId] = useState<string>(productionCoops[0].id);
   const [selectedFlockId, setSelectedFlockId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
 
@@ -32,7 +34,6 @@ export default function ProductionPage() {
         return;
       }
 
-      // CANLI VERİ DİNLEME (onSnapshot)
       const q = query(collection(db, "flocks"), orderBy("hatchDate", "desc"));
       
       const unsubscribeData = onSnapshot(q, (snapshot) => {
@@ -54,8 +55,6 @@ export default function ProductionPage() {
     });
     return () => unsubscribeAuth();
   }, [router]);
-
-  // ... (Kalan useEffect ve render mantığı AYNI, sadece return kısmını aşağıya ekliyorum)
 
   useEffect(() => {
     if (allFlocks.length === 0) return;
@@ -94,9 +93,9 @@ export default function ProductionPage() {
 
       <main className="flex-1 p-4 md:p-6 max-w-7xl mx-auto w-full">
         
-        {/* Kümes Seçimi */}
+        {/* Kümes Seçimi (Filtrelenmiş Liste) */}
         <div className="grid grid-cols-6 gap-3 mb-6">
-            {INITIAL_COOPS.map(coop => {
+            {productionCoops.map(coop => {
                 const isActive = selectedCoopId === coop.id;
                 const hasActiveFlock = allFlocks.some(f => f.coopId === coop.id && isBefore(f.hatchDate, new Date()) && (!f.exitDate || isAfter(f.exitDate, new Date())));
 
@@ -153,7 +152,7 @@ export default function ProductionPage() {
                     </div>
 
                     <div className="flex gap-2">
-                        {/* YENİ IMPORT BUTONU */}
+                        {/* IMPORT BUTONU */}
                         <button 
                             onClick={() => setIsImportOpen(true)}
                             className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold bg-white border border-slate-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 transition-colors shadow-sm"
@@ -163,7 +162,7 @@ export default function ProductionPage() {
                             <span className="hidden sm:inline">Excel Import</span>
                         </button>
 
-                        {/* MEVCUT GEÇMİŞ BUTONU */}
+                        {/* GEÇMİŞ BUTONU */}
                         {historyFlocks.length > 0 && (
                             <div className="relative">
                                 <button 
@@ -228,14 +227,12 @@ export default function ProductionPage() {
             </div>
         )}
 
-        {/* IMPORT MODAL */}
         {selectedFlock && (
             <ImportModal 
                 isOpen={isImportOpen}
                 onClose={() => setIsImportOpen(false)}
                 flock={selectedFlock}
                 onSuccess={() => {
-                    // Sayfayı yenileyerek verilerin taze gelmesini sağla
                     window.location.reload(); 
                 }}
             />
