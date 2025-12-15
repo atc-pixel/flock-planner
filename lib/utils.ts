@@ -49,6 +49,7 @@ export type ProductionLog = {
   date: Date;
   mortality: number;
   cull: number; // Iskarta/Kesim
+  avgWeight?: number;
   eggCount: number;
   brokenEggCount: number;
   dirtyEggCount: number;

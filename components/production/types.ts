@@ -3,6 +3,7 @@ export type TableRowData = {
   logId?: string;
   mortality: number;
   eggCount: number;
+  avgWeight: number; // YENİ
   brokenEggCount: number;
   dirtyEggCount: number;
   feedConsumed: number;
@@ -13,7 +14,7 @@ export type TableRowData = {
   yield: number;
   brokenRate: number;
   dirtyRate: number;
-  ageInWeeks: number; // YENİ: Tavuk Yaşı (Hafta)
+  ageInWeeks: number;
   
   isDirty: boolean;
   

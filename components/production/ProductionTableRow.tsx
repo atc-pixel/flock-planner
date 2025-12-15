@@ -8,9 +8,9 @@ import { TableRowData } from './types';
 interface ProductionTableRowProps {
   row: TableRowData;
   index: number;
-  isFirstRow?: boolean; // YENİ
+  isFirstRow?: boolean;
   onCellChange: (index: number, field: keyof TableRowData, value: string) => void;
-  onInitialCountChange?: (value: string) => void; // YENİ
+  onInitialCountChange?: (value: string) => void;
 }
 
 export function ProductionTableRow({ row, index, isFirstRow, onCellChange, onInitialCountChange }: ProductionTableRowProps) {
@@ -20,8 +20,9 @@ export function ProductionTableRow({ row, index, isFirstRow, onCellChange, onIni
   const isEvenWeek = row.ageInWeeks % 2 === 0;
   const rowId = `row-${format(row.date, 'yyyy-MM-dd')}`;
 
+  // Değişiklik: h-5 -> h-4 ve text-sm -> text-xs
   const inputClass = (bgColor: string, ringColor: string, textColor: string) => 
-    `w-full h-5 text-center outline-none bg-transparent focus:${bgColor} focus:ring-inset focus:ring-1 focus:${ringColor} ${textColor} disabled:opacity-30 font-bold placeholder-transparent text-sm leading-none`;
+    `w-full h-4 text-center outline-none bg-transparent focus:${bgColor} focus:ring-inset focus:ring-1 focus:${ringColor} ${textColor} disabled:opacity-30 font-bold placeholder-transparent text-xs leading-none`;
 
   let rowBgClass = 'bg-white hover:bg-blue-50/30';
   if (isCurrentDay) {
@@ -34,7 +35,7 @@ export function ProductionTableRow({ row, index, isFirstRow, onCellChange, onIni
     <>
       {row.specialEvent && (
         <tr className="bg-slate-50">
-          <td colSpan={10} className="p-0 border-b border-slate-200">
+          <td colSpan={11} className="p-0 border-b border-slate-200">
             <div className={`
               w-full text-center py-0.5 rounded-sm font-bold text-[9px] uppercase tracking-widest border-y
               ${row.specialEvent.color === 'blue' ? 'bg-blue-50 text-blue-700 border-blue-100' : ''}
@@ -48,7 +49,7 @@ export function ProductionTableRow({ row, index, isFirstRow, onCellChange, onIni
 
       {isCurrentDay && (
         <tr>
-            <td colSpan={10} className="p-0 border-t-2 border-red-500 relative h-0 z-20">
+            <td colSpan={11} className="p-0 border-t-2 border-red-500 relative h-0 z-20">
                 <div className="absolute right-0 -top-2 bg-red-500 text-white text-[8px] px-1 py-0 rounded-l font-bold shadow-sm">
                     BUGÜN
                 </div>
@@ -60,13 +61,13 @@ export function ProductionTableRow({ row, index, isFirstRow, onCellChange, onIni
         id={rowId} 
         className={`group transition-colors ${rowBgClass}`}
       >
-        {/* Tarih */}
+        {/* Tarih - h-4 ve text-[10px] yapıldı */}
         <td className={`p-0 border-r border-slate-200 sticky left-0 font-medium text-slate-700 text-center z-10 shadow-[1px_0_0_0_rgba(0,0,0,0.05)] ${isCurrentDay ? 'bg-amber-50/90' : 'bg-white group-hover:bg-inherit'}`}>
-          <div className="flex items-center justify-start gap-1 px-2 h-5 whitespace-nowrap overflow-hidden">
-            <span className={`text-[11px] ${isCurrentDay ? 'text-red-600 font-bold' : ''}`}>
-              {format(row.date, 'dd MMM yyyy', { locale: tr })}
+          <div className="flex items-center justify-start gap-1 px-1 h-4 whitespace-nowrap overflow-hidden">
+            <span className={`text-[10px] ${isCurrentDay ? 'text-red-600 font-bold' : ''}`}>
+              {format(row.date, 'dd MMM', { locale: tr })}
             </span>
-            <span className="text-[10px] text-slate-400 font-semibold uppercase">
+            <span className="text-[9px] text-slate-400 font-semibold uppercase">
               {format(row.date, 'EEE', { locale: tr })}
             </span>
           </div>
@@ -74,7 +75,7 @@ export function ProductionTableRow({ row, index, isFirstRow, onCellChange, onIni
 
         {/* HAFTA */}
         <td className="p-0 border-r border-slate-200 text-center">
-            <div className={`h-5 flex items-center justify-center font-mono font-black text-xs
+            <div className={`h-4 flex items-center justify-center font-mono font-black text-[10px]
                 ${isEvenWeek ? 'text-indigo-400' : 'text-slate-300'}
             `}>
                 {row.ageInWeeks}
@@ -93,7 +94,7 @@ export function ProductionTableRow({ row, index, isFirstRow, onCellChange, onIni
           />
         </td>
 
-        {/* MEVCUT (GÜNCELLENDİ: İlk satırda düzenlenebilir) */}
+        {/* MEVCUT */}
         <td className="p-0 border-r border-slate-200">
           {isFirstRow && onInitialCountChange ? (
              <input 
@@ -104,7 +105,7 @@ export function ProductionTableRow({ row, index, isFirstRow, onCellChange, onIni
                title="Başlangıç mevcudunu buradan değiştirebilirsiniz"
              />
           ) : (
-             <div className="h-5 flex items-center justify-center font-mono select-none text-xs font-bold text-slate-600">
+             <div className="h-4 flex items-center justify-center font-mono select-none text-[10px] font-bold text-slate-600">
                {row.currentBirds.toLocaleString()}
              </div>
           )}
@@ -121,6 +122,19 @@ export function ProductionTableRow({ row, index, isFirstRow, onCellChange, onIni
           />
         </td>
 
+        {/* ORTALAMA GRAMAJ (Yeni Eklenen) */}
+        <td className="p-0 border-r border-slate-200">
+          <input 
+            type="number"
+            step="0.1"
+            disabled={isFutureDate}
+            className={inputClass('bg-indigo-50', 'ring-indigo-300', 'text-indigo-700')}
+            placeholder="-"
+            value={row.avgWeight === 0 ? '' : row.avgWeight}
+            onChange={(e) => onCellChange(index, 'avgWeight', e.target.value)}
+          />
+        </td>
+
         {/* Kırık */}
         <td className="p-0 border-r border-slate-200">
           <input 
@@ -133,7 +147,7 @@ export function ProductionTableRow({ row, index, isFirstRow, onCellChange, onIni
         </td>
 
         {/* % Kırık */}
-        <td className="p-0 border-r border-slate-200 text-center text-xs font-bold text-slate-500 font-mono select-none flex items-center justify-center h-5">
+        <td className="p-0 border-r border-slate-200 text-center text-[10px] font-bold text-slate-500 font-mono select-none flex items-center justify-center h-4">
           {row.brokenRate > 0 ? `%${row.brokenRate.toFixed(1)}` : '-'}
         </td>
 
@@ -149,21 +163,21 @@ export function ProductionTableRow({ row, index, isFirstRow, onCellChange, onIni
         </td>
 
         {/* % Kirli */}
-        <td className="p-0 border-r border-slate-200 text-center text-xs font-bold text-slate-500 font-mono select-none flex items-center justify-center h-5">
+        <td className="p-0 border-r border-slate-200 text-center text-[10px] font-bold text-slate-500 font-mono select-none flex items-center justify-center h-4">
           {row.dirtyRate > 0 ? `%${row.dirtyRate.toFixed(1)}` : '-'}
         </td>
 
         {/* % Verim */}
-        <td className="p-0 text-center font-black bg-emerald-50/20 border-b border-slate-100 flex items-center justify-center h-5">
+        <td className="p-0 text-center font-black bg-emerald-50/20 border-b border-slate-100 flex items-center justify-center h-4">
           {row.eggCount > 0 ? (
-            <span className={`text-xs ${
+            <span className={`text-[10px] ${
               row.yield > 90 ? 'text-emerald-700' : 
               row.yield < 80 ? 'text-red-600' : 'text-amber-700'
             }`}>
               %{row.yield.toFixed(1)}
             </span>
           ) : (
-            <span className="text-slate-300 text-xs">-</span>
+            <span className="text-slate-300 text-[10px]">-</span>
           )}
         </td>
       </tr>

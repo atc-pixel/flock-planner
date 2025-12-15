@@ -1,62 +1,94 @@
 'use client';
 
 import React from 'react';
-import { Save, Loader2, Table, BarChart2 } from 'lucide-react';
+import { Save, Table, BarChart3, LayoutList } from 'lucide-react';
 import { TableRowData } from './types';
 
 interface ProductionToolbarProps {
   onSave: () => void;
   rows: TableRowData[];
   saving: boolean;
-  viewMode: 'table' | 'chart'; // YENİ PROP
-  setViewMode: (mode: 'table' | 'chart') => void; // YENİ PROP
+  viewMode: 'table' | 'chart' | 'weekly';
+  setViewMode: (mode: 'table' | 'chart' | 'weekly') => void;
 }
 
 export function ProductionToolbar({ onSave, rows, saving, viewMode, setViewMode }: ProductionToolbarProps) {
-  const isSaveDisabled = !rows.some(r => r.isDirty) || saving;
-  
-  const totalEgg = rows.reduce((a, b) => a + b.eggCount, 0);
+  // Basit İstatistikler (Sadece Table modunda gösterilebilir veya genel kalabilir)
+  const totalBirds = rows.length > 0 ? rows[rows.length - 1].currentBirds : 0;
+  const totalEggs = rows.reduce((acc, row) => acc + row.eggCount, 0);
 
   return (
-    <div className="p-3 border-b border-slate-200 bg-slate-50/80 flex justify-between items-center sticky top-0 z-20 backdrop-blur-sm h-14">
-      
-      {/* SOL: Görünüm Değiştirici (Tabs) */}
-      <div className="flex bg-slate-200/50 p-1 rounded-lg">
-        <button
-            onClick={() => setViewMode('table')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
-                viewMode === 'table' 
-                ? 'bg-white text-slate-800 shadow-sm' 
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-        >
-            <Table size={14} /> Tablo
-        </button>
-        <button
-            onClick={() => setViewMode('chart')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
-                viewMode === 'chart' 
-                ? 'bg-white text-slate-800 shadow-sm' 
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-        >
-            <BarChart2 size={14} /> Grafikler
-        </button>
+    <div className="flex items-center justify-between p-2 border-b border-slate-200 bg-white sticky top-0 z-30 h-14">
+      {/* SOL: Özet Bilgi */}
+      <div className="flex items-center gap-4 px-2">
+        <div className="flex flex-col">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mevcut Tavuk</span>
+          <span className="text-sm font-black text-slate-700 font-mono">{totalBirds.toLocaleString()}</span>
+        </div>
+        <div className="h-6 w-px bg-slate-200"></div>
+        <div className="flex flex-col">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Top. Yumurta</span>
+          <span className="text-sm font-black text-amber-600 font-mono">{totalEggs.toLocaleString()}</span>
+        </div>
       </div>
 
+      {/* SAĞ: Görünüm Modları ve Kaydet */}
       <div className="flex items-center gap-4">
-        {/* Özet (Sadece Tablo modunda gösterilebilir veya her zaman) */}
-        <div className="hidden sm:flex items-center gap-3 text-[10px] text-slate-500 font-medium border-r border-slate-300 pr-4 mr-1">
-          <span>Toplam Yumurta: <strong className="text-amber-600">{totalEgg.toLocaleString()}</strong></span>
+        
+        {/* Görünüm Değiştirici (Segmented Control) */}
+        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
+          <button
+            onClick={() => setViewMode('table')}
+            className={`p-1.5 rounded-md transition-all flex items-center gap-2 text-xs font-bold ${
+              viewMode === 'table' 
+                ? 'bg-white text-slate-800 shadow-sm ring-1 ring-slate-200' 
+                : 'text-slate-400 hover:text-slate-600'
+            }`}
+            title="Günlük Giriş"
+          >
+            <Table size={16} />
+            <span className="hidden sm:inline">Günlük</span>
+          </button>
+
+          <button
+            onClick={() => setViewMode('weekly')}
+            className={`p-1.5 rounded-md transition-all flex items-center gap-2 text-xs font-bold ${
+              viewMode === 'weekly' 
+                ? 'bg-white text-slate-800 shadow-sm ring-1 ring-slate-200' 
+                : 'text-slate-400 hover:text-slate-600'
+            }`}
+            title="Haftalık Özet"
+          >
+            <LayoutList size={16} />
+            <span className="hidden sm:inline">Haftalık</span>
+          </button>
+
+          <button
+            onClick={() => setViewMode('chart')}
+            className={`p-1.5 rounded-md transition-all flex items-center gap-2 text-xs font-bold ${
+              viewMode === 'chart' 
+                ? 'bg-white text-slate-800 shadow-sm ring-1 ring-slate-200' 
+                : 'text-slate-400 hover:text-slate-600'
+            }`}
+            title="Grafikler"
+          >
+            <BarChart3 size={16} />
+            <span className="hidden sm:inline">Grafik</span>
+          </button>
         </div>
 
+        {/* Kaydet Butonu - Sadece Tablo modunda aktif */}
         <button 
-            onClick={onSave}
-            disabled={isSaveDisabled}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all active:scale-95"
+          onClick={onSave}
+          disabled={saving || viewMode !== 'table'} 
+          className={`
+              flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-xs transition-all
+              ${viewMode !== 'table' ? 'opacity-0 pointer-events-none w-0 px-0 overflow-hidden' : 'opacity-100 w-auto'} 
+              ${saving ? 'bg-slate-100 text-slate-400' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-md hover:shadow-lg active:scale-95'}
+          `}
         >
-            {saving ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
-            {saving ? 'Kaydediliyor...' : 'Kaydet'}
+          <Save size={16} />
+          {saving ? 'Kaydediliyor...' : 'Kaydet'}
         </button>
       </div>
     </div>

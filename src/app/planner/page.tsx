@@ -222,7 +222,7 @@ export default function FlockPlanner() {
             
             <div className="flex grow relative" style={{ minHeight: `${totalHeight + COLUMN_HEADER_HEIGHT}px` }}>
               {/* Sütunları Render Et */}
-              {INITIAL_COOPS.map((coop) => (
+              {INITIAL_COOPS.filter(c => c.type === 'hen').map((coop) => (
                 <CoopColumn
                   key={coop.id}
                   coop={coop}
