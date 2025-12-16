@@ -65,9 +65,10 @@ export function ProductionTable({ flock }: ProductionTableProps) {
     if (flock.id) fetchData();
   }, [fetchData]);
 
-  // 2. HESAPLAMA
+  // 2. HESAPLAMA VE SATIR OLUŞTURMA
   useEffect(() => {
     const startDate = startOfDay(flock.hatchDate);
+    // İsteğe bağlı: Transfer tarihinden başlatmak istersen burayı değiştirebilirsin
     const endDate = addDays(new Date(), 30); 
     const days = eachDayOfInterval({ start: startDate, end: endDate });
 
@@ -80,14 +81,27 @@ export function ProductionTable({ flock }: ProductionTableProps) {
       const currentBirds = runningPopulation; 
       runningPopulation -= mortality;
 
-      const eggCount = log?.eggCount || 0;
-      const avgWeight = log?.avgWeight || 0;
+      const totalEggCount = log?.eggCount || 0;
       const brokenEggCount = log?.brokenEggCount || 0;
       const dirtyEggCount = log?.dirtyEggCount || 0;
+      
+      // YENİ: Sağlam Yumurta = Toplam - (Kırık + Kirli)
+      // Veritabanı tutarlılığı için eksiye düşmemesini sağlıyoruz
+      const goodCount = Math.max(0, totalEggCount - brokenEggCount - dirtyEggCount);
+      
+      // YENİ: Notlar
+      const notes = log?.notes || "";
 
-      const yieldVal = currentBirds > 0 ? (eggCount / currentBirds) * 100 : 0;
-      const brokenRate = eggCount > 0 ? (brokenEggCount / eggCount) * 100 : 0;
-      const dirtyRate = eggCount > 0 ? (dirtyEggCount / eggCount) * 100 : 0;
+      const avgWeight = log?.avgWeight || 0;
+      const feedConsumed = log?.feedConsumed || 0;
+      const waterConsumed = log?.waterConsumed || 0;
+
+      // Verim Hesabı: Toplam Yumurta / Mevcut
+      const yieldVal = currentBirds > 0 ? (totalEggCount / currentBirds) * 100 : 0;
+      
+      // Oranlar (Toplam üzerinden)
+      const brokenRate = totalEggCount > 0 ? (brokenEggCount / totalEggCount) * 100 : 0;
+      const dirtyRate = totalEggCount > 0 ? (dirtyEggCount / totalEggCount) * 100 : 0;
       
       const ageInWeeks = differenceInWeeks(day, flock.hatchDate) + 1;
 
@@ -102,12 +116,14 @@ export function ProductionTable({ flock }: ProductionTableProps) {
         date: day,
         logId: log?.id,
         mortality,
-        eggCount,
-        avgWeight,
+        eggCount: totalEggCount, // DB'deki esas toplam
+        goodCount,               // Arayüz için hesaplanan
         brokenEggCount,
         dirtyEggCount,
-        feedConsumed: log?.feedConsumed || 0,
-        waterConsumed: log?.waterConsumed || 0,
+        avgWeight,
+        feedConsumed,
+        waterConsumed,
+        notes,                   // Not verisi
         currentBirds,
         yield: yieldVal,
         brokenRate,
@@ -121,22 +137,18 @@ export function ProductionTable({ flock }: ProductionTableProps) {
     setRows(newRows);
   }, [allLogs, localInitialCount, flock]); 
 
-  // --- YENİ EKLENEN KISIM: TAB DEĞİŞİKLİĞİNDE RESET ---
-  // "table" modundan çıkıldığında (weekly veya chart), scroll kilidini açıyoruz.
-  // Böylece tekrar "table" moduna dönüldüğünde ışınlanma tekrar çalışıyor.
+  // Tab Değişikliğinde Scroll Reset
   useEffect(() => {
     if (viewMode !== 'table') {
         hasScrolledRef.current = false;
     }
   }, [viewMode]);
 
-  // 3. IŞINLANMA (DİREKT BUGÜNE ODAKLAN)
+  // Işınlanma (Otomatik Scroll)
   useLayoutEffect(() => {
     if (viewMode === 'table' && !loading && rows.length > 0 && !hasScrolledRef.current) {
-        
         const todayId = `row-${format(new Date(), 'yyyy-MM-dd')}`;
         const todayEl = document.getElementById(todayId);
-
         if (todayEl) {
             todayEl.scrollIntoView({ behavior: 'auto', block: 'start' });
             hasScrolledRef.current = true;
@@ -144,21 +156,37 @@ export function ProductionTable({ flock }: ProductionTableProps) {
     }
   }, [loading, rows, viewMode]);
 
-  // HANDLERS
+  // --- HANDLERS ---
+
   const handleInitialCountChange = (value: string) => {
     setLocalInitialCount(Number(value)); 
   };
 
   const handleCellChange = (index: number, field: keyof TableRowData, value: string) => {
-    const val = value === '' ? 0 : Number(value);
     const newRows = [...rows];
-    const row = { ...newRows[index], [field]: val, isDirty: true };
+    let row = { ...newRows[index], isDirty: true };
 
+    // String/Number ayrımı: Notlar text, diğerleri number
+    if (field === 'notes') {
+        row.notes = value;
+    } else {
+        const numVal = value === '' ? 0 : Number(value);
+        // @ts-ignore - Dinamik key ataması güvenli kabul edildi
+        row[field] = numVal;
+    }
+
+    // Yumurta Sayıları Değiştiyse TOPLAMI Güncelle
+    if (field === 'goodCount' || field === 'brokenEggCount' || field === 'dirtyEggCount') {
+        row.eggCount = row.goodCount + row.brokenEggCount + row.dirtyEggCount;
+    }
+
+    // Türetilmiş Değerleri (Verim, Oranlar) Tekrar Hesapla
     const current = row.currentBirds;
-    const eggs = row.eggCount;
-    row.yield = current > 0 ? (eggs / current) * 100 : 0;
-    row.brokenRate = eggs > 0 ? (row.brokenEggCount / eggs) * 100 : 0;
-    row.dirtyRate = eggs > 0 ? (row.dirtyEggCount / eggs) * 100 : 0;
+    const totalEggs = row.eggCount;
+
+    row.yield = current > 0 ? (totalEggs / current) * 100 : 0;
+    row.brokenRate = totalEggs > 0 ? (row.brokenEggCount / totalEggs) * 100 : 0;
+    row.dirtyRate = totalEggs > 0 ? (row.dirtyEggCount / totalEggs) * 100 : 0;
 
     newRows[index] = row;
     setRows(newRows);
@@ -176,12 +204,13 @@ export function ProductionTable({ flock }: ProductionTableProps) {
               coopId: flock.coopId,
               date: row.date,
               mortality: row.mortality,
-              eggCount: row.eggCount,
+              eggCount: row.eggCount, // Toplam olarak kaydediyoruz
               avgWeight: row.avgWeight,
               brokenEggCount: row.brokenEggCount,
               dirtyEggCount: row.dirtyEggCount,
-              feedConsumed: row.feedConsumed, 
-              waterConsumed: row.waterConsumed, 
+              feedConsumed: row.feedConsumed,
+              waterConsumed: row.waterConsumed,
+              notes: row.notes || "" // Notları kaydet
           };
 
           if (row.logId) {
@@ -193,6 +222,7 @@ export function ProductionTable({ flock }: ProductionTableProps) {
           }
         });
 
+        // Başlangıç sayısı değiştiyse onu da güncelle
         if (localInitialCount !== flock.initialCount) {
             const flockRef = doc(db, "flocks", flock.id);
             batch.update(flockRef, { initialCount: localInitialCount });
@@ -201,10 +231,10 @@ export function ProductionTable({ flock }: ProductionTableProps) {
         await batch.commit();
         hasScrolledRef.current = false;
         await fetchData(); 
-        alert("Kaydedildi.");
+        alert("Başarıyla kaydedildi.");
     } catch (error) {
-        console.error("Hata:", error);
-        alert("Hata oluştu.");
+        console.error("Kayıt Hatası:", error);
+        alert("Bir hata oluştu, konsolu kontrol ediniz.");
     } finally {
         setSaving(false);
     }

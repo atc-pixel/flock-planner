@@ -2,12 +2,18 @@ export type TableRowData = {
   date: Date;
   logId?: string;
   mortality: number;
-  eggCount: number;
-  avgWeight: number; // YENİ
+  
+  // Yumurta Verileri
+  goodCount: number;
   brokenEggCount: number;
   dirtyEggCount: number;
-  feedConsumed: number;
+  eggCount: number; // DB'deki Toplam
+  
+  avgWeight: number;
+  feedConsumed: number; // Günlükte tutulmaya devam edebilir ama haftalıkta override edilecek
   waterConsumed: number;
+  
+  notes: string; // YENİ: Günlük Notlar
   
   // Hesaplananlar
   currentBirds: number; 
