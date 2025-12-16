@@ -1,35 +1,29 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useLayoutEffect, useRef } from 'react';
 import { TableRowData } from './types';
-import { startOfWeek, endOfWeek, format } from 'date-fns';
+import { startOfWeek, endOfWeek, format, isWithinInterval } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import { doc, setDoc, getDoc, onSnapshot, collection } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, collection } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Loader2, Save } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 interface ProductionWeeklyTableProps {
   rows: TableRowData[];
 }
 
-// Haftalık veri tipi (Sadece yem için)
 type WeeklyData = {
-    [weekKey: string]: number; // "2025-W23": 1500 (kg)
+    [weekKey: string]: number; 
 }
 
 export function ProductionWeeklyTable({ rows }: ProductionWeeklyTableProps) {
   const [weeklyFeed, setWeeklyFeed] = useState<WeeklyData>({});
   const [loading, setLoading] = useState(true);
-  const [flockId, setFlockId] = useState<string>("");
+  const scrollRef = useRef<boolean>(false);
 
-  // Haftalık gruplama
+  // Haftalık gruplama (Kronolojik: Eski -> Yeni)
   const weeks = React.useMemo(() => {
     if (rows.length === 0) return [];
-    
-    // Flock ID'yi rows'dan alalım (hepsi aynı sürüye ait)
-    // rows[0].logId içinde flockId yok ama context'ten gelmesi daha iyiydi. 
-    // Pratik çözüm: Veritabanına kaydederken flockId'ye ihtiyacımız var. 
-    // rows prop'unda flockId yok, parent'tan gelse iyi olurdu ama şimdilik logic kuralım.
     
     const groups: any[] = [];
     let currentWeek: any = null;
@@ -47,61 +41,63 @@ export function ProductionWeeklyTable({ rows }: ProductionWeeklyTableProps) {
                 endDate: endOfWeek(row.date, { weekStartsOn: 1 }),
                 totalMortality: 0,
                 totalEggs: 0,
-                totalDirty: 0,
-                totalBroken: 0,
-                notes: new Set(), // Notları topla
+                notes: new Set(),
                 days: 0,
-                startBirds: row.currentBirds + row.mortality // Haftanın başındaki kuş sayısı (yaklaşık)
+                startBirds: row.currentBirds + row.mortality
             };
         }
         
         currentWeek.totalMortality += row.mortality;
         currentWeek.totalEggs += row.eggCount;
-        currentWeek.totalDirty += row.dirtyEggCount;
-        currentWeek.totalBroken += row.brokenEggCount;
         if(row.notes) currentWeek.notes.add(row.notes);
         currentWeek.days++;
     });
     if (currentWeek) groups.push(currentWeek);
 
-    return groups.reverse(); // En son hafta en üstte
+    // .reverse() KALDIRILDI -> Kronolojik sıralama (1. Hafta en üstte)
+    return groups; 
   }, [rows]);
 
-  // Firebase'den Haftalık Yem Verilerini Çek
+  // Firebase Yem Verisi
   useEffect(() => {
-    // Bu örnekte tüm 'weekly_stats' koleksiyonunu dinliyoruz. 
-    // Gerçekte flockId filtresi gerekir. 
-    // Basitlik için collection'daki belge ID'si "WEEK-KEY" olacak şekilde yapıyorum.
-    // Daha doğrusu: doc ID = "flockId_WeekKey" olmalı.
-    
-    // NOT: Flock ID'yi productionTable'dan buraya prop olarak geçmek en doğrusu.
-    // Şimdilik varsayım yapıyorum.
     const unsub = onSnapshot(collection(db, "weekly_stats"), (snap) => {
         const feeds: WeeklyData = {};
         snap.forEach(d => {
-            // d.id örneği: "flock123_2025-45"
-            // Biz sadece weekKey ile eşleştireceğiz, flockId kontrolünü atlıyorum şimdilik.
-            const data = d.data();
-            feeds[d.id] = data.feedConsumed;
+            feeds[d.id] = d.data().feedConsumed;
         });
         setWeeklyFeed(feeds);
         setLoading(false);
     });
-
     return () => unsub();
   }, []);
 
-  const handleFeedChange = async (weekKey: string, value: string) => {
-    // FlockId'yi parent'tan alamadığımız için rows'dan dolaylı alalım veya localStorage/URL'den.
-    // Güvenli yöntem: ProductionTable bu component'e flockId prop'u geçmeli. 
-    // Şimdilik "demo_flock" prefixi kullanıyorum, bunu düzeltmelisin.
-    const flockId = "demo_flock"; // TODO: Parent'tan prop olarak al
-    const docId = `${flockId}_${weekKey}`;
-    
-    const val = Number(value);
-    setWeeklyFeed(prev => ({ ...prev, [docId]: val })); // Optimistic UI
+  // IŞINLANMA: Sayfa açıldığında güncel haftaya git
+  useLayoutEffect(() => {
+    if (!loading && weeks.length > 0 && !scrollRef.current) {
+        const today = new Date();
+        // Bugünün içinde olduğu haftayı bul
+        const currentWeek = weeks.find(w => 
+            isWithinInterval(today, { start: w.startDate, end: w.endDate })
+        );
 
-    // Debounce veya Blur ile kaydetmek daha iyi ama burada direkt yazıyorum
+        // Eğer güncel hafta varsa ona, yoksa en son haftaya (en aşağı) git
+        const targetKey = currentWeek ? currentWeek.key : weeks[weeks.length - 1].key;
+        const el = document.getElementById(`week-${targetKey}`);
+        
+        if (el) {
+            el.scrollIntoView({ behavior: 'auto', block: 'center' });
+            scrollRef.current = true;
+        }
+    }
+  }, [loading, weeks]);
+
+  const handleFeedChange = async (weekKey: string, value: string) => {
+    const flockId = "demo_flock"; // TODO: Parent'tan alınmalı
+    const docId = `${flockId}_${weekKey}`;
+    const val = Number(value);
+    
+    setWeeklyFeed(prev => ({ ...prev, [docId]: val }));
+
     await setDoc(doc(db, "weekly_stats", docId), {
         feedConsumed: val,
         weekKey: weekKey,
@@ -114,40 +110,39 @@ export function ProductionWeeklyTable({ rows }: ProductionWeeklyTableProps) {
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
         <table className="w-full text-xs text-left">
-            <thead className="bg-slate-50 text-slate-500 font-bold border-b">
+            <thead className="bg-slate-50 text-slate-500 font-bold border-b sticky top-0 z-10">
                 <tr>
-                    <th className="p-2">Hafta</th>
+                    <th className="p-2 w-10">Hafta</th>
                     <th className="p-2">Tarih Aralığı</th>
                     <th className="p-2 text-center">Ölü</th>
                     <th className="p-2 text-center">Yumurta</th>
                     <th className="p-2 text-center">% Verim</th>
-                    <th className="p-2 text-center bg-amber-50 text-amber-800 border-x border-amber-100">
-                        Yem (Kg) <br/><span className="text-[9px] font-normal opacity-70">(Manuel)</span>
+                    <th className="p-2 text-center bg-amber-50 text-amber-800 border-x border-amber-100 w-24">
+                        Yem (Kg)
                     </th>
-                    <th className="p-2 text-center">FCR</th>
-                    <th className="p-2 w-1/3">Notlar</th>
+                    {/* FCR Kaldırıldı */}
+                    <th className="p-2 w-32">Notlar</th> {/* Genişlik kısıtlandı */}
                 </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
                 {weeks.map((week) => {
-                    const flockId = "demo_flock"; // TODO: Düzelt
+                    const flockId = "demo_flock"; 
                     const docId = `${flockId}_${week.key}`;
                     const feed = weeklyFeed[docId] || 0;
                     
-                    // Hesaplamalar
                     const avgBirds = week.startBirds - (week.totalMortality / 2);
-                    const henDayYield = (week.totalEggs / (avgBirds * 7)) * 100;
-                    
-                    // FCR: Yem (kg) / Yumurta (kg) -> Yumurta kg'sini ortalama gramajdan bulmamız lazım.
-                    // Şimdilik basitçe: Yem / (Yumurta Sayısı * 0.063) (63gr varsayılan)
-                    const eggMassKg = week.totalEggs * 0.063; 
-                    const fcr = eggMassKg > 0 ? (feed / eggMassKg) : 0;
-
+                    const henDayYield = avgBirds > 0 ? (week.totalEggs / (avgBirds * 7)) * 100 : 0;
                     const weekNotes = Array.from(week.notes).join(", ");
+                    
+                    const isCurrentWeek = isWithinInterval(new Date(), { start: week.startDate, end: week.endDate });
 
                     return (
-                        <tr key={week.key} className="hover:bg-slate-50">
-                            <td className="p-2 font-bold text-indigo-600">#{week.weekNum}</td>
+                        <tr 
+                            key={week.key} 
+                            id={`week-${week.key}`}
+                            className={`hover:bg-slate-50 transition-colors ${isCurrentWeek ? 'bg-blue-50/50' : ''}`}
+                        >
+                            <td className="p-2 font-bold text-indigo-600 text-center">#{week.weekNum}</td>
                             <td className="p-2 text-slate-500 text-[10px]">
                                 {format(week.startDate, 'dd MMM')} - {format(week.endDate, 'dd MMM', {locale: tr})}
                             </td>
@@ -155,19 +150,17 @@ export function ProductionWeeklyTable({ rows }: ProductionWeeklyTableProps) {
                             <td className="p-2 text-center font-bold text-slate-700">{week.totalEggs.toLocaleString()}</td>
                             <td className="p-2 text-center font-bold text-emerald-600">%{henDayYield.toFixed(1)}</td>
                             
-                            {/* MANUEL YEM GİRİŞİ */}
                             <td className="p-1 text-center bg-amber-50/50 border-x border-amber-100">
                                 <input 
                                     type="number" 
-                                    className="w-full text-center bg-transparent font-bold text-amber-800 outline-none focus:bg-white focus:ring-1 focus:ring-amber-300 rounded"
-                                    placeholder="0"
+                                    className="w-full text-center bg-transparent font-bold text-amber-800 outline-none focus:bg-white focus:ring-1 focus:ring-amber-300 rounded h-6"
+                                    placeholder="-"
                                     value={feed || ''}
                                     onChange={(e) => handleFeedChange(week.key, e.target.value)}
                                 />
                             </td>
 
-                            <td className="p-2 text-center font-mono text-slate-500">{fcr > 0 ? fcr.toFixed(2) : '-'}</td>
-                            <td className="p-2 text-[10px] text-slate-400 italic truncate max-w-xs" title={weekNotes}>
+                            <td className="p-2 text-[10px] text-slate-400 italic truncate max-w-[120px]" title={weekNotes}>
                                 {weekNotes}
                             </td>
                         </tr>

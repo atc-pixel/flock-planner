@@ -22,8 +22,8 @@ export function ProductionTableHeader() {
         <th className="p-1 border-b border-r border-slate-200 text-center w-12 text-indigo-600">Ort.Gr</th>
         <th className="p-1 border-b border-r border-slate-200 text-center w-16 font-black text-slate-800 bg-emerald-50/50">% Verim</th>
 
-        {/* YENİ: Notlar Başlığı */}
-        <th className="p-1 border-b text-left pl-2 w-64 text-slate-400">Notlar</th>
+        {/* YENİ: Genişlik w-32 (Yarıya düştü) */}
+        <th className="p-1 border-b text-left pl-2 w-32 text-slate-400">Notlar</th>
       </tr>
     </thead>
   );

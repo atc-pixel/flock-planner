@@ -1,12 +1,11 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { 
-  ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine 
+  ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts';
-import { format } from 'date-fns';
 import { TableRowData } from './types';
-import { getBreedStandard } from '../../lib/standards';
+import { startOfWeek, format } from 'date-fns';
 
 interface ProductionChartsProps {
   data: TableRowData[];
@@ -14,93 +13,129 @@ interface ProductionChartsProps {
 
 export function ProductionCharts({ data }: ProductionChartsProps) {
   
-  const chartData = data
-    .filter(row => row.eggCount > 0 || row.mortality > 0 || row.notes) // Not varsa da göster
-    .map(row => ({
-      date: format(row.date, 'dd MMM'),
-      fullDate: format(row.date, 'dd MMMM yyyy'),
-      week: row.ageInWeeks,
-      actualYield: Number(row.yield.toFixed(1)),
-      standardYield: Number(getBreedStandard(row.ageInWeeks).toFixed(1)),
-      brokenRate: Number(row.brokenRate.toFixed(1)),
-      dirtyRate: Number(row.dirtyRate.toFixed(1)),
-      note: row.notes // Notu veriye ekle
-    }));
+  // Günlük veriyi HAFTALIK olarak özetle
+  const weeklyData = useMemo(() => {
+    const groups: any = {};
+    
+    data.forEach(row => {
+        const weekKey = row.ageInWeeks;
+        if (!groups[weekKey]) {
+            groups[weekKey] = {
+                week: weekKey,
+                totalEggs: 0,
+                totalBroken: 0,
+                totalDirty: 0,
+                birdDays: 0, // Hen-Day hesabı için (Kuş * Gün)
+            };
+        }
+        groups[weekKey].totalEggs += row.eggCount;
+        groups[weekKey].totalBroken += row.brokenEggCount;
+        groups[weekKey].totalDirty += row.dirtyEggCount;
+        groups[weekKey].birdDays += row.currentBirds;
+    });
 
-  // Notu olan günleri bul
-  const noteLines = chartData.filter(d => d.note && d.note.length > 0);
+    return Object.values(groups).map((g: any) => {
+        const yieldVal = g.birdDays > 0 ? (g.totalEggs / g.birdDays) * 100 : 0;
+        const brokenRate = g.totalEggs > 0 ? (g.totalBroken / g.totalEggs) * 100 : 0;
+        const dirtyRate = g.totalEggs > 0 ? (g.totalDirty / g.totalEggs) * 100 : 0;
 
-  // Custom Tooltip: Not varsa en altta göster
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      const currentData = payload[0].payload;
-      return (
-        <div className="bg-white p-3 border border-slate-200 shadow-xl rounded-lg text-xs">
-          <p className="font-bold text-slate-700 mb-2 border-b pb-1">{currentData.fullDate}</p>
-          {payload.map((p: any, index: number) => (
-            <div key={index} className="flex items-center gap-2 mb-1" style={{ color: p.color }}>
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }}></span>
-              <span>{p.name}: <strong>{p.value}{p.unit}</strong></span>
-            </div>
-          ))}
-          
-          {/* NOT GÖSTERİMİ */}
-          {currentData.note && (
-             <div className="mt-2 pt-2 border-t border-dashed border-slate-200 text-slate-600 bg-yellow-50 p-2 rounded -mx-1">
-                <span className="font-bold text-amber-600 block text-[10px] uppercase">📝 Günlük Not</span>
-                {currentData.note}
-             </div>
-          )}
-        </div>
-      );
-    }
-    return null;
-  };
+        return {
+            name: `Hafta ${g.week}`,
+            yield: Number(yieldVal.toFixed(1)),
+            broken: Number(brokenRate.toFixed(2)),
+            dirty: Number(dirtyRate.toFixed(2)),
+        };
+    }).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })); // Sayısal sırala
+  }, [data]);
+
+  if (weeklyData.length === 0) {
+    return <div className="p-12 text-center text-slate-400">Grafik için veri bekleniyor...</div>;
+  }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-4 bg-slate-50/50 rounded-xl border border-slate-200">
-      
-      {/* 1. VERİM GRAFİĞİ */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 relative">
-        <h3 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            Verim Analizi (% Üretim)
+    <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm h-[500px]">
+        <h3 className="text-sm font-bold text-slate-700 mb-6 flex items-center justify-between">
+            <span>Haftalık Verim & Kalite Analizi</span>
+            <div className="flex gap-4 text-xs">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Verim (%)</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"></span> Kırık (%)</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500"></span> Kirli (%)</span>
+            </div>
         </h3>
-        <div className="h-64 text-xs">
-            <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis dataKey="date" tick={{fontSize: 10}} axisLine={false} tickLine={false} minTickGap={30} />
-                    <YAxis domain={[0, 100]} tick={{fontSize: 10}} axisLine={false} tickLine={false} unit="%" />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend iconType="circle" wrapperStyle={{fontSize: '11px', paddingTop: '10px'}}/>
-                    
-                    <Line type="monotone" dataKey="standardYield" name="Standart" stroke="#94a3b8" strokeDasharray="5 5" dot={false} strokeWidth={2}/>
-                    <Area type="monotone" dataKey="actualYield" name="Gerçekleşen" stroke="#10b981" fill="url(#colorYield)" strokeWidth={2} />
-                    
-                    {/* NOT ÇİZGİLERİ */}
-                    {noteLines.map((entry, i) => (
-                        <ReferenceLine 
-                            key={i} 
-                            x={entry.date} 
-                            stroke="#fbbf24" 
-                            strokeDasharray="3 3"
-                            label={{ position: 'top', value: '!', fill: '#d97706', fontSize: 14, fontWeight: 'bold' }} 
-                        />
-                    ))}
 
-                    <defs>
-                        <linearGradient id="colorYield" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
-                            <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                        </linearGradient>
-                    </defs>
-                </ComposedChart>
-            </ResponsiveContainer>
-        </div>
-      </div>
-      
-      {/* Kalite Grafiği için de aynısını yapabilirsin (ReferenceLine ekleyerek) */}
+        <ResponsiveContainer width="100%" height="90%">
+            <ComposedChart data={weeklyData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                
+                <XAxis 
+                    dataKey="name" 
+                    tick={{fontSize: 10, fill: '#64748b'}} 
+                    axisLine={false} 
+                    tickLine={false}
+                />
+                
+                {/* SOL EKSEN: VERİM (%) */}
+                <YAxis 
+                    yAxisId="left"
+                    domain={[0, 100]} 
+                    tick={{fontSize: 10, fill: '#10b981'}} 
+                    axisLine={false} 
+                    tickLine={false} 
+                    unit="%"
+                    label={{ value: 'Verim %', angle: -90, position: 'insideLeft', fill: '#10b981', fontSize: 10 }}
+                />
+
+                {/* SAĞ EKSEN: KALİTE (%) - Genelde %0-5 arası olur, o yüzden domain farklı */}
+                <YAxis 
+                    yAxisId="right"
+                    orientation="right"
+                    domain={[0, 'auto']} 
+                    tick={{fontSize: 10, fill: '#ef4444'}} 
+                    axisLine={false} 
+                    tickLine={false}
+                    unit="%"
+                    label={{ value: 'Hata Oranı %', angle: 90, position: 'insideRight', fill: '#ef4444', fontSize: 10 }}
+                />
+
+                <Tooltip 
+                    contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                    labelStyle={{color: '#64748b', fontWeight: 'bold', marginBottom: '5px'}}
+                />
+                
+                {/* Çizgiler */}
+                <Line 
+                    yAxisId="left"
+                    type="monotone" 
+                    dataKey="yield" 
+                    name="Toplam Verim" 
+                    stroke="#10b981" 
+                    strokeWidth={3} 
+                    dot={{r: 3, fill: '#10b981', strokeWidth: 0}}
+                    activeDot={{r: 6}}
+                />
+
+                <Line 
+                    yAxisId="right"
+                    type="monotone" 
+                    dataKey="broken" 
+                    name="Kırık Oranı" 
+                    stroke="#ef4444" 
+                    strokeWidth={2} 
+                    dot={false}
+                />
+
+                <Line 
+                    yAxisId="right"
+                    type="monotone" 
+                    dataKey="dirty" 
+                    name="Kirli Oranı" 
+                    stroke="#f59e0b" 
+                    strokeWidth={2} 
+                    dot={false}
+                />
+
+            </ComposedChart>
+        </ResponsiveContainer>
     </div>
   );
 }
