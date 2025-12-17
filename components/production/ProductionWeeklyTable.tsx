@@ -54,7 +54,6 @@ export function ProductionWeeklyTable({ rows }: ProductionWeeklyTableProps) {
     });
     if (currentWeek) groups.push(currentWeek);
 
-    // .reverse() KALDIRILDI -> Kronolojik sıralama (1. Hafta en üstte)
     return groups; 
   }, [rows]);
 
@@ -75,12 +74,10 @@ export function ProductionWeeklyTable({ rows }: ProductionWeeklyTableProps) {
   useLayoutEffect(() => {
     if (!loading && weeks.length > 0 && !scrollRef.current) {
         const today = new Date();
-        // Bugünün içinde olduğu haftayı bul
         const currentWeek = weeks.find(w => 
             isWithinInterval(today, { start: w.startDate, end: w.endDate })
         );
 
-        // Eğer güncel hafta varsa ona, yoksa en son haftaya (en aşağı) git
         const targetKey = currentWeek ? currentWeek.key : weeks[weeks.length - 1].key;
         const el = document.getElementById(`week-${targetKey}`);
         
@@ -92,7 +89,7 @@ export function ProductionWeeklyTable({ rows }: ProductionWeeklyTableProps) {
   }, [loading, weeks]);
 
   const handleFeedChange = async (weekKey: string, value: string) => {
-    const flockId = "demo_flock"; // TODO: Parent'tan alınmalı
+    const flockId = "demo_flock"; 
     const docId = `${flockId}_${weekKey}`;
     const val = Number(value);
     
@@ -120,8 +117,7 @@ export function ProductionWeeklyTable({ rows }: ProductionWeeklyTableProps) {
                     <th className="p-2 text-center bg-amber-50 text-amber-800 border-x border-amber-100 w-24">
                         Yem (Kg)
                     </th>
-                    {/* FCR Kaldırıldı */}
-                    <th className="p-2 w-32">Notlar</th> {/* Genişlik kısıtlandı */}
+                    <th className="p-2 w-32">Notlar</th>
                 </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
