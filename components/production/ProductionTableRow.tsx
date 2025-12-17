@@ -1,102 +1,246 @@
-'use client';
-
-import React from 'react';
-import { format, isToday, isFuture } from 'date-fns';
-import { tr } from 'date-fns/locale';
+import React, { useState, useEffect, useRef } from 'react'; // useRef eklendi
 import { TableRowData } from './types';
-import { MessageSquare } from 'lucide-react';
+import { format } from 'date-fns';
+import { tr } from 'date-fns/locale';
 
 interface ProductionTableRowProps {
-  row: TableRowData;
   index: number;
-  isFirstRow?: boolean;
+  row: TableRowData;
+  isFirstRow: boolean;
   onCellChange: (index: number, field: keyof TableRowData, value: string) => void;
   onInitialCountChange?: (value: string) => void;
 }
 
-export function ProductionTableRow({ row, index, isFirstRow, onCellChange, onInitialCountChange }: ProductionTableRowProps) {
-  const isFutureDate = isFuture(row.date);
-  const isCurrentDay = isToday(row.date);
-  const isEvenWeek = row.ageInWeeks % 2 === 0;
+// React.memo ile sarmalayarak gereksiz render'ları engelliyoruz
+export const ProductionTableRow = React.memo(({ 
+    index, 
+    row, 
+    isFirstRow, 
+    onCellChange,
+    onInitialCountChange
+}: ProductionTableRowProps) => {
+
+  // --- LOCAL STATE YÖNETİMİ ---
+  // Props'tan gelen veriyi state'e alıyoruz ki kullanıcı yazarken tablo render edilmesin
+  const [localData, setLocalData] = useState({
+      mortality: row.mortality,
+      goodCount: row.goodCount,
+      brokenEggCount: row.brokenEggCount,
+      dirtyEggCount: row.dirtyEggCount,
+      feedConsumed: row.feedConsumed,
+      waterConsumed: row.waterConsumed,
+      avgWeight: row.avgWeight,
+      notes: row.notes || ""
+  });
+
+  // Eğer dışarıdan (DB'den veya hesaplamadan) veri değişirse local state'i güncelle
+  useEffect(() => {
+    setLocalData({
+        mortality: row.mortality,
+        goodCount: row.goodCount,
+        brokenEggCount: row.brokenEggCount,
+        dirtyEggCount: row.dirtyEggCount,
+        feedConsumed: row.feedConsumed,
+        waterConsumed: row.waterConsumed,
+        avgWeight: row.avgWeight,
+        notes: row.notes || ""
+    });
+  }, [row]);
+
+  // Hücreden çıkınca (onBlur) ana tabloya haber ver
+  const handleBlur = (field: keyof TableRowData, val: string | number) => {
+    // Sadece değer gerçekten değiştiyse tetikle (Performans için kritik)
+    // @ts-ignore
+    if (val != row[field]) { 
+        onCellChange(index, field, val.toString());
+    }
+  };
+
+  // Input değişince sadece local state'i güncelle (Anlık tepki, kasma yok)
+  const handleChange = (field: keyof typeof localData, val: string) => {
+    setLocalData(prev => ({ ...prev, [field]: val }));
+  };
+
+  const dateLabel = format(row.date, 'd MMM EEEE', { locale: tr });
   const rowId = `row-${format(row.date, 'yyyy-MM-dd')}`;
 
-  const inputClass = (bgColor: string, ringColor: string, textColor: string) => 
-    `w-full h-4 text-center outline-none bg-transparent focus:${bgColor} focus:ring-inset focus:ring-1 focus:${ringColor} ${textColor} disabled:opacity-30 font-bold placeholder-transparent text-xs leading-none`;
-
-  let rowBgClass = 'bg-white hover:bg-blue-50/30';
-  if (isCurrentDay) rowBgClass = 'bg-amber-50/60';
-  else if (isEvenWeek) rowBgClass = 'bg-slate-50/80 hover:bg-blue-50/30';
+  // Bugün mü?
+  const isToday = new Date().toDateString() === row.date.toDateString();
+  
+  // Özel Olay Renkleri
+  let rowClass = isToday ? "bg-blue-50/60" : "hover:bg-slate-50";
+  if (row.specialEvent) {
+      if (row.specialEvent.color === 'blue') rowClass = "bg-blue-100/30";
+      else if (row.specialEvent.color === 'emerald') rowClass = "bg-emerald-100/30";
+  }
 
   return (
-    <>
-      {row.specialEvent && (
-        <tr className="bg-slate-50">
-          <td colSpan={14} className="p-0 border-b border-slate-200"> {/* Colspan arttırıldı */}
-            <div className={`w-full text-center py-0.5 rounded-sm font-bold text-[9px] uppercase tracking-widest border-y ${row.specialEvent.color === 'blue' ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-emerald-50 text-emerald-700 border-emerald-100'}`}>
-              ✨ {row.specialEvent.title}
+    <tr id={rowId} className={`group transition-colors border-b border-slate-100 last:border-0 ${rowClass}`}>
+      
+      {/* 1. Tarih ve Yaş */}
+      <td className="p-2 whitespace-nowrap border-r border-slate-100 bg-white/50 sticky left-0 z-10 group-hover:bg-slate-50">
+        <div className="flex flex-col">
+            <span className={`font-bold text-[11px] ${isToday ? 'text-blue-600' : 'text-slate-700'}`}>
+                {dateLabel}
+            </span>
+            <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-[9px] font-mono text-slate-400 bg-slate-100 px-1 rounded">
+                    {row.ageInWeeks}. Hafta
+                </span>
+                {row.specialEvent && (
+                    <span className={`text-[9px] font-bold px-1 rounded bg-${row.specialEvent.color}-100 text-${row.specialEvent.color}-700`}>
+                        {row.specialEvent.title}
+                    </span>
+                )}
             </div>
-          </td>
-        </tr>
-      )}
+        </div>
+      </td>
 
-      {isCurrentDay && (
-        <tr>
-            <td colSpan={14} className="p-0 border-t-2 border-red-500 relative h-0 z-20">
-                <div className="absolute right-0 -top-2 bg-red-500 text-white text-[8px] px-1 py-0 rounded-l font-bold shadow-sm">BUGÜN</div>
-            </td>
-        </tr>
-      )}
-
-      <tr id={rowId} className={`group transition-colors ${rowBgClass}`}>
-        {/* ... (Tarih, Hafta, Ölü, Mevcut kodları aynen kalacak) ... */}
-        
-        {/* Örnek olarak sadece değişen son kısımları ve başı koyuyorum, aradakiler önceki kodla aynı */}
-        <td className={`p-0 border-r border-slate-200 sticky left-0 font-medium text-slate-700 text-center z-10 shadow-[1px_0_0_0_rgba(0,0,0,0.05)] ${isCurrentDay ? 'bg-amber-50/90' : 'bg-white group-hover:bg-inherit'}`}>
-          <div className="flex items-center justify-start gap-1 px-1 h-4 whitespace-nowrap overflow-hidden">
-            <span className={`text-[10px] ${isCurrentDay ? 'text-red-600 font-bold' : ''}`}>{format(row.date, 'dd MMM', { locale: tr })}</span>
-            <span className="text-[9px] text-slate-400 font-semibold uppercase">{format(row.date, 'EEE', { locale: tr })}</span>
-          </div>
-        </td>
-
-        <td className="p-0 border-r border-slate-200 text-center"><div className={`h-4 flex items-center justify-center font-mono font-black text-[10px] ${isEvenWeek ? 'text-indigo-400' : 'text-slate-300'}`}>{row.ageInWeeks}</div></td>
-        <td className="p-0 border-r border-slate-200"><input type="number" disabled={isFutureDate} className={inputClass('bg-red-50', 'ring-red-300', 'text-red-600')} value={row.mortality === 0 ? '' : row.mortality} onChange={(e) => onCellChange(index, 'mortality', e.target.value)} /></td>
-        <td className="p-0 border-r border-slate-200">
-          {isFirstRow && onInitialCountChange ? (
-             <input type="number" className={`${inputClass('bg-indigo-50', 'ring-indigo-300', 'text-indigo-700')} underline decoration-dashed decoration-indigo-300`} value={row.currentBirds} onChange={(e) => onInitialCountChange(e.target.value)} />
-          ) : (
-             <div className="h-4 flex items-center justify-center font-mono select-none text-[10px] font-bold text-slate-600">{row.currentBirds.toLocaleString()}</div>
-          )}
-        </td>
-
-        {/* Yumurta Inputları */}
-        <td className="p-0 border-r border-slate-200"><input type="number" disabled={isFutureDate} className={inputClass('bg-emerald-50', 'ring-emerald-300', 'text-emerald-700')} value={row.goodCount === 0 ? '' : row.goodCount} onChange={(e) => onCellChange(index, 'goodCount', e.target.value)} /></td>
-        <td className="p-0 border-r border-slate-200"><input type="number" disabled={isFutureDate} className={inputClass('bg-slate-100', 'ring-slate-300', 'text-slate-600')} value={row.brokenEggCount === 0 ? '' : row.brokenEggCount} onChange={(e) => onCellChange(index, 'brokenEggCount', e.target.value)} /></td>
-        <td className="p-0 border-r border-slate-200"><input type="number" disabled={isFutureDate} className={inputClass('bg-slate-100', 'ring-slate-300', 'text-slate-600')} value={row.dirtyEggCount === 0 ? '' : row.dirtyEggCount} onChange={(e) => onCellChange(index, 'dirtyEggCount', e.target.value)} /></td>
-        <td className="p-0 border-r border-slate-200"><div className="h-4 flex items-center justify-center font-mono select-none text-[10px] font-black text-amber-800 bg-amber-50/30">{row.eggCount > 0 ? row.eggCount : '-'}</div></td>
-        
-        <td className="p-0 border-r border-slate-200"><input type="number" step="0.1" disabled={isFutureDate} className={inputClass('bg-indigo-50', 'ring-indigo-300', 'text-indigo-700')} value={row.avgWeight === 0 ? '' : row.avgWeight} onChange={(e) => onCellChange(index, 'avgWeight', e.target.value)} /></td>
-        <td className="p-0 border-r border-slate-200 text-center font-black bg-emerald-50/20 border-b flex items-center justify-center h-4">{row.eggCount > 0 ? <span className={`text-[10px] ${row.yield > 90 ? 'text-emerald-700' : row.yield < 80 ? 'text-red-600' : 'text-amber-700'}`}>%{row.yield.toFixed(1)}</span> : <span className="text-slate-300 text-[10px]">-</span>}</td>
-
-        {/* YENİ: NOTLAR Inputu */}
-        <td className="p-0 border-b border-slate-200">
-          <div className="relative group/note h-4">
-             <input 
-                type="text"
-                disabled={isFutureDate}
-                className="w-full h-full px-2 text-[10px] text-slate-600 bg-transparent outline-none focus:bg-yellow-50 focus:ring-1 focus:ring-yellow-300 placeholder-slate-300 truncate"
-                placeholder="Not ekle..."
-                value={row.notes || ''}
-                onChange={(e) => onCellChange(index, 'notes', e.target.value)}
-             />
-             {/* İkon sadece not varsa görünsün */}
-             {row.notes && (
-                <div className="absolute right-1 top-0.5 pointer-events-none text-yellow-500">
-                    <MessageSquare size={10} fill="currentColor" />
+      {/* 2. Mevcut (Current Birds) */}
+      <td className="p-2 text-center border-r border-slate-100 w-24 bg-slate-50/30">
+        <div className="flex flex-col items-center justify-center h-full">
+            <span className="font-mono font-bold text-slate-600 text-xs">
+                {row.currentBirds.toLocaleString()}
+            </span>
+            
+            {/* Sadece ilk satırda Başlangıç Sayısı düzenlenebilir */}
+            {isFirstRow && onInitialCountChange && (
+                <div className="mt-1">
+                     <span className="text-[9px] text-slate-400 block mb-0.5">Başlangıç:</span>
+                     <input 
+                        type="number"
+                        className="w-16 text-center text-[10px] border border-blue-200 rounded bg-white focus:ring-1 focus:ring-blue-500 outline-none"
+                        defaultValue={row.currentBirds + row.mortality} 
+                        onBlur={(e) => onInitialCountChange(e.target.value)}
+                     />
                 </div>
-             )}
-          </div>
-        </td>
-      </tr>
-    </>
+            )}
+        </div>
+      </td>
+
+      {/* 3. Ölü (Mortality) */}
+      <td className="p-1 border-r border-slate-100 w-16">
+        <input 
+            type="number" 
+            min="0"
+            className="w-full h-8 text-center bg-transparent focus:bg-white outline-none focus:ring-2 focus:ring-red-200 rounded font-bold text-red-600"
+            value={localData.mortality || ''}
+            onChange={(e) => handleChange('mortality', e.target.value)}
+            onBlur={(e) => handleBlur('mortality', e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+        />
+      </td>
+
+      {/* 4. Verim % (Otomatik Hesaplanır - ReadOnly) */}
+      <td className="p-1 border-r border-slate-100 w-16 bg-slate-50/50">
+        <div className="flex items-center justify-center h-full">
+            <span className={`font-bold text-xs ${row.yield < 85 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                {row.yield > 0 ? `%${row.yield.toFixed(1)}` : '-'}
+            </span>
+        </div>
+      </td>
+
+      {/* 5. Yumurta Grubu (Sağlam, Kırık, Kirli) */}
+      <td className="p-1 border-r border-slate-100 w-20">
+        <input 
+            type="number" 
+            className="w-full h-8 text-center bg-transparent focus:bg-white outline-none focus:ring-2 focus:ring-emerald-200 rounded font-bold text-slate-700"
+            placeholder="-"
+            value={localData.goodCount || ''}
+            onChange={(e) => handleChange('goodCount', e.target.value)}
+            onBlur={(e) => handleBlur('goodCount', e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+        />
+        {/* Toplam Göstergesi (Alt bilgi) */}
+        {row.eggCount > 0 && (
+            <div className="text-[9px] text-center text-slate-400 font-mono mt-[-4px]">
+                ∑ {row.eggCount}
+            </div>
+        )}
+      </td>
+
+      <td className="p-1 border-r border-slate-100 w-16 bg-amber-50/30">
+        <input 
+            type="number" 
+            className="w-full h-8 text-center bg-transparent focus:bg-white outline-none focus:ring-2 focus:ring-amber-200 rounded text-amber-700 font-medium"
+            placeholder="-"
+            value={localData.brokenEggCount || ''}
+            onChange={(e) => handleChange('brokenEggCount', e.target.value)}
+            onBlur={(e) => handleBlur('brokenEggCount', e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+        />
+      </td>
+
+      <td className="p-1 border-r border-slate-100 w-16 bg-slate-50/50">
+        <input 
+            type="number" 
+            className="w-full h-8 text-center bg-transparent focus:bg-white outline-none focus:ring-2 focus:ring-slate-200 rounded text-slate-600 font-medium"
+            placeholder="-"
+            value={localData.dirtyEggCount || ''}
+            onChange={(e) => handleChange('dirtyEggCount', e.target.value)}
+            onBlur={(e) => handleBlur('dirtyEggCount', e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+        />
+      </td>
+
+      {/* 6. Gramaj */}
+      <td className="p-1 border-r border-slate-100 w-16">
+        <input 
+            type="number" 
+            step="0.1"
+            className="w-full h-8 text-center bg-transparent focus:bg-white outline-none focus:ring-2 focus:ring-indigo-200 rounded text-indigo-700 font-bold"
+            placeholder="-"
+            value={localData.avgWeight || ''}
+            onChange={(e) => handleChange('avgWeight', e.target.value)}
+            onBlur={(e) => handleBlur('avgWeight', e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+        />
+      </td>
+
+      {/* 7. Yem ve Su */}
+      <td className="p-1 border-r border-slate-100 w-20 bg-amber-50/10">
+        <input 
+            type="number" 
+            className="w-full h-8 text-center bg-transparent focus:bg-white outline-none focus:ring-2 focus:ring-amber-200 rounded text-amber-800"
+            placeholder="kg"
+            value={localData.feedConsumed || ''}
+            onChange={(e) => handleChange('feedConsumed', e.target.value)}
+            onBlur={(e) => handleBlur('feedConsumed', e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+        />
+      </td>
+
+      <td className="p-1 border-r border-slate-100 w-20 bg-blue-50/10">
+        <input 
+            type="number" 
+            className="w-full h-8 text-center bg-transparent focus:bg-white outline-none focus:ring-2 focus:ring-blue-200 rounded text-blue-800"
+            placeholder="lt"
+            value={localData.waterConsumed || ''}
+            onChange={(e) => handleChange('waterConsumed', e.target.value)}
+            onBlur={(e) => handleBlur('waterConsumed', e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+        />
+      </td>
+
+      {/* 8. Notlar */}
+      <td className="p-1 relative">
+         <input 
+            type="text" 
+            className="w-full h-8 px-2 text-left text-xs bg-transparent focus:bg-white outline-none focus:ring-2 focus:ring-slate-200 rounded text-slate-600 truncate focus:text-clip"
+            placeholder="Not ekle..."
+            value={localData.notes}
+            onChange={(e) => handleChange('notes', e.target.value)}
+            onBlur={(e) => handleBlur('notes', e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+        />
+         {/* Değişiklik İndikatörü */}
+         {row.isDirty && (
+            <div className="absolute right-1 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-amber-400 rounded-full" title="Kaydedilmedi" />
+         )}
+      </td>
+    </tr>
   );
-}
+});
+
+// React.memo için display name (Debugging için)
+ProductionTableRow.displayName = 'ProductionTableRow';
