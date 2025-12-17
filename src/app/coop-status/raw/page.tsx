@@ -1,27 +1,37 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
-import { ArrowLeft, RefreshCw, AlertTriangle, Database } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { format } from 'date-fns';
-import { tr } from 'date-fns/locale';
+import { ArrowLeft, RefreshCw, AlertTriangle, Database, ChevronDown } from 'lucide-react';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 
-// --- İÇ BİLEŞEN (Asıl Mantık Burada) ---
+// Kümes Listesi
+const COOPS = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'C1', 'C2'];
+
 function RawDataContent() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
-  const coopId = searchParams.get('coopId') || 'T1';
+  
+  // URL'den oku yoksa T1 varsay
+  const currentCoopId = searchParams.get('coopId') || 'T1';
 
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState('6h'); 
   const [error, setError] = useState<string | null>(null);
 
+  // Kümes değiştirince URL'i güncelle (bu da useEffect'i tetikler)
+  const handleCoopChange = (newCoop: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('coopId', newCoop);
+    router.replace(`${pathname}?${params.toString()}`);
+  };
+
   const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/coop-status/api/influx-raw?coopId=${coopId}&range=${range}`);
+      const res = await fetch(`/coop-status/api/influx-raw?coopId=${currentCoopId}&range=${range}`);
       const json = await res.json();
       
       if (!res.ok) throw new Error(json.error || "Bilinmeyen hata");
@@ -39,9 +49,10 @@ function RawDataContent() {
     }
   };
 
+  // coopId veya range değişince veri çek
   useEffect(() => {
     fetchData();
-  }, [range, coopId]);
+  }, [range, currentCoopId]);
 
   // Toplamlar (b5 dahil)
   const totals = useMemo(() => {
@@ -63,8 +74,8 @@ function RawDataContent() {
     return acc;
   }, [data]);
 
-  // T2 ise veya b5 verisi varsa 5. kolonu göster
-  const showBattery5 = coopId === 'T2' || totals.b5 > 0;
+  // T2 veya T3 ise VEYA b5 verisi akıyorsa 5. kolonu göster
+  const showBattery5 = currentCoopId === 'T2' || currentCoopId === 'T3' || totals.b5 > 0;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -72,14 +83,31 @@ function RawDataContent() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between bg-white p-4 rounded-xl border border-slate-200 shadow-sm gap-4">
           <div className="flex items-center gap-4">
-            <button onClick={() => router.back()} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500">
+            <button onClick={() => router.back()} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors">
               <ArrowLeft size={20} />
             </button>
-            <div>
-              <h1 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <Database size={20} className="text-blue-600"/> {coopId} - InfluxDB Ham Veri
-              </h1>
-              <p className="text-xs text-slate-500">Aggregation uygulanmamış anlık veri paketleri</p>
+            
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
+                <Database size={24} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-lg font-bold text-slate-800">Ham Veri Analizi</h1>
+                  {/* KÜMES SEÇİCİ */}
+                  <div className="relative group">
+                    <select 
+                      value={currentCoopId} 
+                      onChange={(e) => handleCoopChange(e.target.value)}
+                      className="appearance-none bg-slate-100 border-none text-slate-900 font-bold text-lg rounded px-2 py-0.5 pr-8 focus:ring-2 focus:ring-blue-500 cursor-pointer hover:bg-slate-200 transition-colors"
+                    >
+                      {COOPS.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <ChevronDown size={16} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500" />
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500">InfluxDB Aggregation uygulanmamış anlık veri paketleri</p>
+              </div>
             </div>
           </div>
 
@@ -107,7 +135,7 @@ function RawDataContent() {
         </div>
 
         {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center gap-3">
+            <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center gap-3 animate-pulse">
                 <AlertTriangle size={20} />
                 <span className="text-sm font-medium">Hata: {error}</span>
             </div>
@@ -135,7 +163,7 @@ function RawDataContent() {
                   <tr className="bg-blue-50 border-b-2 border-blue-100 font-black text-blue-900 sticky top-0 z-10 shadow-sm">
                     <td className="p-4 flex items-center gap-2">
                         <span>∑ GENEL TOPLAM</span>
-                        <span className="text-[10px] font-normal text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">({data.length} satır)</span>
+                        <span className="text-[10px] font-normal text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">({data.length} veri)</span>
                     </td>
                     <td className="p-4 text-right">{totals.b1.toFixed(2)}</td>
                     <td className="p-4 text-right">{totals.b2.toFixed(2)}</td>
@@ -147,9 +175,9 @@ function RawDataContent() {
                 )}
 
                 {loading ? (
-                  <tr><td colSpan={showBattery5 ? 7 : 6} className="p-12 text-center text-slate-400">Yükleniyor...</td></tr>
+                  <tr><td colSpan={showBattery5 ? 7 : 6} className="p-12 text-center text-slate-400">Veriler InfluxDB'den çekiliyor...</td></tr>
                 ) : data.length === 0 ? (
-                  <tr><td colSpan={showBattery5 ? 7 : 6} className="p-12 text-center text-slate-400">Bu aralıkta veri bulunamadı.</td></tr>
+                  <tr><td colSpan={showBattery5 ? 7 : 6} className="p-12 text-center text-slate-400">Bu aralıkta "{currentCoopId}" için veri bulunamadı.</td></tr>
                 ) : (
                   data.map((row, i) => {
                     const b1 = row['device_frmpayload_data_WaterMeter1'] || 0;
@@ -184,7 +212,6 @@ function RawDataContent() {
   );
 }
 
-// --- ANA SAYFA BİLEŞENİ (Export Edilen) ---
 export default function RawDataPage() {
   return (
     <div className="min-h-screen bg-slate-50 p-6 font-sans text-slate-800">

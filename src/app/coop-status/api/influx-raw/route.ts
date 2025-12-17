@@ -3,11 +3,11 @@ import { getInflux, INFLUX_ORG, INFLUX_BUCKET } from '@/lib/influx';
 
 export const dynamic = "force-dynamic";
 
-// Cihaz Haritası
+// Cihaz Haritası: Kümes ID -> Influx Device Name eşleşmesi
 const DEVICE_MAP: Record<string, string> = {
   'T1': 'MKR1310-K1-WaterMeter',
   'T2': 'MKR1310-K2-WaterMeter',
-  'T3': 'MKR1310-K3-WaterMeter',
+  'T3': 'MKR1310-K3-WaterMeter', // T3 için cihaz tanımlı
   'T4': 'MKR1310-K4-WaterMeter',
   'T5': 'MKR1310-K5-WaterMeter',
   'T6': 'MKR1310-K6-WaterMeter',
@@ -20,12 +20,15 @@ export async function GET(request: Request) {
   const coopId = searchParams.get('coopId') || 'T1';
   const range = searchParams.get('range') || '6h'; 
 
+  // İstek atılan kümes ID'sine karşılık gelen cihaz adını bul
   const deviceName = DEVICE_MAP[coopId];
   if (!deviceName) {
     return NextResponse.json({ success: false, error: "Bilinmeyen Kümes ID" }, { status: 400 });
   }
 
-  // YENİ: [1-5]
+  // InfluxDB Flux Sorgusu
+  // Regex /device_frmpayload_data_WaterMeter[1-5]/ sayesinde 1'den 5'e kadar tüm bataryaları çeker.
+  // Bu sayede T3'teki WaterMeter5 verisi de otomatik olarak gelir.
   const query = `
     from(bucket: "${INFLUX_BUCKET}")
       |> range(start: -${range})
@@ -49,6 +52,7 @@ export async function GET(request: Request) {
           rows.push(o);
         },
         error(error: any) {
+          console.error("Influx Query Error:", error);
           reject(error);
         },
         complete() {
@@ -64,6 +68,7 @@ export async function GET(request: Request) {
     });
 
   } catch (error: any) {
+    console.error("API Error:", error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
