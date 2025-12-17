@@ -153,7 +153,7 @@ export const ProductionTableRow = React.memo(({
         />
         {/* Toplam Göstergesi (Alt bilgi) */}
         {row.eggCount > 0 && (
-            <div className="text-[9px] text-center text-slate-400 font-mono mt-[-4px]">
+            <div className="text-[9px] text-center text-slate-400 font-mono -mt-1">
                 ∑ {row.eggCount}
             </div>
         )}
