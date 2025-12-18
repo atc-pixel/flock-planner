@@ -130,75 +130,83 @@ export function ProductionTable({ flock }: ProductionTableProps) {
     setRows(newRows);
   }, [allLogs, localInitialCount, flock]); 
 
-  // 3. HAFTALIK AGGREGATION
-  const weeklyData = useMemo(() => {
+  // 3. HAFTALIK AGGREGATION (YENİDEN YAZILMIŞ VERSİYON)
+  const weeklyData = useMemo<WeeklyData[]>(() => {
     if (rows.length === 0) return [];
-    
-    // HATA ÇÖZÜMÜ 1: Dizinin tipini kesin olarak belirtiyoruz.
-    const groups: WeeklyData[] = []; 
-    
-    // HATA ÇÖZÜMÜ 2: Değişkenin tipini kesin olarak belirtiyoruz.
-    let currentWeek: WeeklyData | null = null;
-    
-    let weightSum = 0;
-    let weightCount = 0;
 
+    // ADIM 1: Satırları hafta numarasına göre grupla (Dictionary/Record yapısı)
+    // Bu sayede "önceki hafta bitti mi?", "currentWeek null mı?" derdi kalmaz.
+    const rowsByWeek: Record<string, TableRowData[]> = {};
+    
     rows.forEach(row => {
-        const weekKey = row.ageInWeeks.toString();
-
-        if (!currentWeek || currentWeek.key !== weekKey) {
-            if (currentWeek) {
-                // Önceki haftayı kapatırken 'avgWeight' ataması yapıyoruz.
-                // TypeScript artık currentWeek'in WeeklyData olduğunu bildiği için kızmayacak.
-                currentWeek.avgWeight = weightCount > 0 ? weightSum / weightCount : 0;
-                groups.push(currentWeek);
-            }
-            // Yeni hafta başlat
-            weightSum = 0;
-            weightCount = 0;
-            
-            // Tüm alanlarıyla tam bir WeeklyData objesi oluşturuyoruz
-            currentWeek = {
-                key: weekKey,
-                weekNum: row.ageInWeeks,
-                startDate: row.date,
-                endDate: row.date,
-                totalMortality: 0,
-                totalEggs: 0,
-                totalBroken: 0,
-                totalDirty: 0,
-                avgWeight: 0, // Başlangıç değeri
-                birdDays: 0,
-                startBirds: row.currentBirds + row.mortality,
-                days: 0,
-                notes: new Set<string>(),
-            };
-        }
-        
-        // Verileri işle
-        currentWeek.endDate = row.date;
-        currentWeek.totalMortality += row.mortality;
-        currentWeek.totalEggs += row.eggCount;
-        currentWeek.totalBroken += row.brokenEggCount;
-        currentWeek.totalDirty += row.dirtyEggCount;
-        currentWeek.birdDays += row.currentBirds;
-        
-        if (row.avgWeight > 0) {
-            weightSum += row.avgWeight;
-            weightCount++;
-        }
-        
-        if (row.notes) currentWeek.notes.add(row.notes);
-        currentWeek.days++;
+      const weekKey = row.ageInWeeks.toString();
+      if (!rowsByWeek[weekKey]) {
+        rowsByWeek[weekKey] = [];
+      }
+      rowsByWeek[weekKey].push(row);
     });
-    
-    // Son haftayı ekle
-    if (currentWeek) {
-        currentWeek.avgWeight = weightCount > 0 ? weightSum / weightCount : 0;
-        groups.push(currentWeek);
-    }
 
-    return groups; 
+    // ADIM 2: Gruplanmış veriyi WeeklyData dizisine dönüştür
+    const groups: WeeklyData[] = Object.values(rowsByWeek).map((weekRows) => {
+      // Veriler zaten tarih sırasına göre geldiği için:
+      // weekRows[0] -> Haftanın ilk günü
+      // weekRows[son] -> Haftanın son günü
+      const firstDay = weekRows[0];
+      const lastDay = weekRows[weekRows.length - 1];
+      
+      let weightSum = 0;
+      let weightCount = 0;
+      const notesSet = new Set<string>();
+
+      // O haftanın toplamlarını hesapla
+      const weekSummary = weekRows.reduce((acc, row) => {
+          acc.totalMortality += row.mortality;
+          acc.totalEggs += row.eggCount;
+          acc.totalBroken += row.brokenEggCount;
+          acc.totalDirty += row.dirtyEggCount;
+          acc.birdDays += row.currentBirds;
+          
+          // Ortalama ağırlık için verileri topla
+          if (row.avgWeight > 0) {
+              weightSum += row.avgWeight;
+              weightCount++;
+          }
+          
+          if (row.notes) notesSet.add(row.notes);
+          
+          return acc;
+      }, {
+          totalMortality: 0,
+          totalEggs: 0,
+          totalBroken: 0,
+          totalDirty: 0,
+          birdDays: 0
+      });
+
+      // WeeklyData objesini oluştur ve döndür
+      return {
+          key: firstDay.ageInWeeks.toString(),
+          weekNum: firstDay.ageInWeeks,
+          startDate: firstDay.date,
+          endDate: lastDay.date,
+          
+          totalMortality: weekSummary.totalMortality,
+          totalEggs: weekSummary.totalEggs,
+          totalBroken: weekSummary.totalBroken,
+          totalDirty: weekSummary.totalDirty,
+          
+          // Hata veren alan artık burada güvenle hesaplanıyor:
+          avgWeight: weightCount > 0 ? weightSum / weightCount : 0,
+          
+          birdDays: weekSummary.birdDays,
+          startBirds: firstDay.currentBirds + firstDay.mortality, // Haftanın başlangıç sayısı
+          days: weekRows.length,
+          notes: notesSet
+      };
+    });
+
+    // Haftaları numara sırasına göre diz (Garantilemek için)
+    return groups.sort((a, b) => a.weekNum - b.weekNum);
   }, [rows]);
 
   // Tab Değişikliğinde Scroll Reset
