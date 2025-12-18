@@ -15,7 +15,6 @@ import { ProductionTableRow } from './ProductionTableRow';
 import { ProductionCharts } from './ProductionCharts';
 import { ProductionWeeklyTable } from './ProductionWeeklyTable';
 
-// TİPLERİ IMPORT ET
 import { TableRowData, WeeklyData } from './types';
 
 interface ProductionTableProps {
@@ -67,7 +66,7 @@ export function ProductionTable({ flock }: ProductionTableProps) {
     if (flock.id) fetchData();
   }, [fetchData]);
 
-  // 2. GÜNLÜK SATIR OLUŞTURMA
+  // 2. GÜNLÜK SATIR OLUŞTURMA (GÜNCELLENDİ: Önce ölü düşülür)
   useEffect(() => {
     const startDate = startOfDay(flock.hatchDate);
     const endDate = addDays(new Date(), 30); 
@@ -79,8 +78,9 @@ export function ProductionTable({ flock }: ProductionTableProps) {
       const log = allLogs.find(l => isSameDay(l.date, day));
       const mortality = log?.mortality || 0;
       
-      const currentBirds = runningPopulation; 
+      // YENİ MANTIK: Önce ölüyü düş, sonra mevcudu belirle.
       runningPopulation -= mortality;
+      const currentBirds = runningPopulation; 
 
       const totalEggCount = log?.eggCount || 0;
       const brokenEggCount = log?.brokenEggCount || 0;
@@ -130,27 +130,20 @@ export function ProductionTable({ flock }: ProductionTableProps) {
     setRows(newRows);
   }, [allLogs, localInitialCount, flock]); 
 
-  // 3. HAFTALIK AGGREGATION (YENİDEN YAZILMIŞ VERSİYON)
+  // 3. HAFTALIK AGGREGATION (GÜNCELLENDİ: TS Güvenli Yapı)
   const weeklyData = useMemo<WeeklyData[]>(() => {
     if (rows.length === 0) return [];
 
-    // ADIM 1: Satırları hafta numarasına göre grupla (Dictionary/Record yapısı)
-    // Bu sayede "önceki hafta bitti mi?", "currentWeek null mı?" derdi kalmaz.
+    // Verileri haftalara göre grupla
     const rowsByWeek: Record<string, TableRowData[]> = {};
-    
     rows.forEach(row => {
       const weekKey = row.ageInWeeks.toString();
-      if (!rowsByWeek[weekKey]) {
-        rowsByWeek[weekKey] = [];
-      }
+      if (!rowsByWeek[weekKey]) rowsByWeek[weekKey] = [];
       rowsByWeek[weekKey].push(row);
     });
 
-    // ADIM 2: Gruplanmış veriyi WeeklyData dizisine dönüştür
+    // Grupları WeeklyData objesine çevir
     const groups: WeeklyData[] = Object.values(rowsByWeek).map((weekRows) => {
-      // Veriler zaten tarih sırasına göre geldiği için:
-      // weekRows[0] -> Haftanın ilk günü
-      // weekRows[son] -> Haftanın son günü
       const firstDay = weekRows[0];
       const lastDay = weekRows[weekRows.length - 1];
       
@@ -158,7 +151,6 @@ export function ProductionTable({ flock }: ProductionTableProps) {
       let weightCount = 0;
       const notesSet = new Set<string>();
 
-      // O haftanın toplamlarını hesapla
       const weekSummary = weekRows.reduce((acc, row) => {
           acc.totalMortality += row.mortality;
           acc.totalEggs += row.eggCount;
@@ -166,14 +158,11 @@ export function ProductionTable({ flock }: ProductionTableProps) {
           acc.totalDirty += row.dirtyEggCount;
           acc.birdDays += row.currentBirds;
           
-          // Ortalama ağırlık için verileri topla
           if (row.avgWeight > 0) {
               weightSum += row.avgWeight;
               weightCount++;
           }
-          
           if (row.notes) notesSet.add(row.notes);
-          
           return acc;
       }, {
           totalMortality: 0,
@@ -183,7 +172,6 @@ export function ProductionTable({ flock }: ProductionTableProps) {
           birdDays: 0
       });
 
-      // WeeklyData objesini oluştur ve döndür
       return {
           key: firstDay.ageInWeeks.toString(),
           weekNum: firstDay.ageInWeeks,
@@ -195,19 +183,18 @@ export function ProductionTable({ flock }: ProductionTableProps) {
           totalBroken: weekSummary.totalBroken,
           totalDirty: weekSummary.totalDirty,
           
-          // Hata veren alan artık burada güvenle hesaplanıyor:
           avgWeight: weightCount > 0 ? weightSum / weightCount : 0,
           
           birdDays: weekSummary.birdDays,
-          startBirds: firstDay.currentBirds + firstDay.mortality, // Haftanın başlangıç sayısı
+          startBirds: firstDay.currentBirds + firstDay.mortality, 
           days: weekRows.length,
           notes: notesSet
       };
     });
 
-    // Haftaları numara sırasına göre diz (Garantilemek için)
     return groups.sort((a, b) => a.weekNum - b.weekNum);
   }, [rows]);
+
 
   // Tab Değişikliğinde Scroll Reset
   useEffect(() => {
@@ -216,7 +203,7 @@ export function ProductionTable({ flock }: ProductionTableProps) {
     }
   }, [viewMode]);
 
-  // Işınlanma
+  // Işınlanma (Scroll to today)
   useLayoutEffect(() => {
     if (viewMode === 'table' && !loading && rows.length > 0 && !hasScrolledRef.current && tableContainerRef.current) {
         const todayId = `row-${format(new Date(), 'yyyy-MM-dd')}`;
@@ -246,14 +233,19 @@ export function ProductionTable({ flock }: ProductionTableProps) {
         // @ts-ignore
         row[field] = numVal;
     }
+    // Yumurta toplamı güncelle
     if (field === 'goodCount' || field === 'brokenEggCount' || field === 'dirtyEggCount') {
         row.eggCount = row.goodCount + row.brokenEggCount + row.dirtyEggCount;
     }
-    const current = row.currentBirds;
+    
+    // Değerler değişti, türetilmiş verileri tekrar hesapla
+    const current = row.currentBirds; // Current birds değişmez (o günün ölüsü dışında)
     const totalEggs = row.eggCount;
+    
     row.yield = current > 0 ? (totalEggs / current) * 100 : 0;
     row.brokenRate = totalEggs > 0 ? (row.brokenEggCount / totalEggs) * 100 : 0;
     row.dirtyRate = totalEggs > 0 ? (row.dirtyEggCount / totalEggs) * 100 : 0;
+    
     newRows[index] = row;
     setRows(newRows);
   };
@@ -262,6 +254,8 @@ export function ProductionTable({ flock }: ProductionTableProps) {
     setSaving(true);
     try {
         const batch = writeBatch(db);
+        
+        // Değişen satırları kaydet
         const changes = rows.filter(r => r.isDirty);
         changes.forEach(row => {
           const docData = {
@@ -285,10 +279,13 @@ export function ProductionTable({ flock }: ProductionTableProps) {
               batch.set(ref, docData);
           }
         });
+
+        // Başlangıç sayısı değiştiyse flock'u güncelle
         if (localInitialCount !== flock.initialCount) {
             const flockRef = doc(db, "flocks", flock.id);
             batch.update(flockRef, { initialCount: localInitialCount });
         }
+        
         await batch.commit();
         hasScrolledRef.current = false;
         await fetchData(); 
@@ -300,7 +297,16 @@ export function ProductionTable({ flock }: ProductionTableProps) {
 
   return (
     <div className="bg-white rounded-xl shadow border border-slate-200 overflow-hidden flex flex-col h-full max-h-[80vh]">
-      <ProductionToolbar onSave={handleSave} rows={rows} saving={saving} viewMode={viewMode} setViewMode={setViewMode} />
+      <ProductionToolbar 
+        onSave={handleSave} 
+        rows={rows} 
+        saving={saving} 
+        viewMode={viewMode} 
+        setViewMode={setViewMode} 
+        // YENİ: Başlangıç sayısı toolbar'a taşındı
+        initialCount={localInitialCount}
+        onInitialCountChange={handleInitialCountChange}
+      />
       <div ref={tableContainerRef} className="overflow-auto grow scroll-smooth relative bg-slate-50">
         
         {viewMode === 'table' && (
@@ -308,7 +314,14 @@ export function ProductionTable({ flock }: ProductionTableProps) {
                 <ProductionTableHeader />
                 <tbody className="divide-y divide-slate-100">
                     {rows.map((row, idx) => (
-                    <ProductionTableRow key={idx} index={idx} row={row} isFirstRow={idx === 0} onCellChange={handleCellChange} onInitialCountChange={handleInitialCountChange} />
+                    <ProductionTableRow 
+                        key={idx} 
+                        index={idx} 
+                        row={row} 
+                        isFirstRow={idx === 0} 
+                        onCellChange={handleCellChange} 
+                        // YENİ: onInitialCountChange buradan kaldırıldı
+                    />
                     ))}
                 </tbody>
              </table>

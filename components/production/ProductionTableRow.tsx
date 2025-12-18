@@ -11,7 +11,7 @@ interface ProductionTableRowProps {
   row: TableRowData;
   isFirstRow: boolean;
   onCellChange: (index: number, field: keyof TableRowData, value: string) => void;
-  onInitialCountChange?: (value: string) => void;
+  // YENİ: onInitialCountChange buradan kaldırıldı
 }
 
 export function ProductionTableRow({ 
@@ -19,7 +19,6 @@ export function ProductionTableRow({
     row, 
     isFirstRow, 
     onCellChange,
-    onInitialCountChange
 }: ProductionTableRowProps) {
 
   const [localData, setLocalData] = useState({
@@ -101,7 +100,7 @@ export function ProductionTableRow({
         </tr>
       )}
 
-      {/* 2. BUGÜN KIRMIZI ÇİZGİSİ (Yumuşak) */}
+      {/* 2. BUGÜN KIRMIZI ÇİZGİSİ */}
       {isCurrentDay && (
         <tr>
             <td colSpan={13} className="p-0 border-t border-red-300 relative h-0 z-20 shadow-[0_1px_3px_rgba(252,165,165,0.4)]">
@@ -115,7 +114,7 @@ export function ProductionTableRow({
       {/* 3. ANA VERİ SATIRI */}
       <tr id={rowId} className={`group transition-colors border-b border-slate-100 last:border-0 ${rowClass}`}>
         
-        {/* Tarih - w-20 */}
+        {/* Tarih */}
         <td className={`p-0 border-r border-slate-100 sticky left-0 z-10 w-20 ${stickyDateClass}`}>
             <div className="flex flex-col items-center justify-center h-full py-1">
                 <span className={`font-bold text-[10px] ${isCurrentDay ? 'text-red-500' : 'text-slate-700'}`}>
@@ -127,29 +126,21 @@ export function ProductionTableRow({
             </div>
         </td>
 
-        {/* Hafta - w-8 */}
+        {/* Hafta */}
         <td className="p-0 border-r border-slate-100 text-center w-8">
             <span className="text-[9px] font-mono text-slate-400 font-bold">{row.ageInWeeks}</span>
         </td>
 
-        {/* Mevcut - w-14 */}
+        {/* Mevcut (YENİ: Sadece text gösterimi, input kaldırıldı) */}
         <td className="p-0 border-r border-slate-100 text-center w-14 bg-slate-50/30">
             <div className="flex flex-col items-center justify-center">
                 <span className="font-mono font-bold text-slate-600 text-[10px]">
                     {row.currentBirds.toLocaleString()}
                 </span>
-                {isFirstRow && onInitialCountChange && (
-                    <input 
-                        type="number"
-                        className="w-12 text-center text-[9px] border border-blue-200 rounded mt-0.5"
-                        defaultValue={row.currentBirds + row.mortality} 
-                        onBlur={(e) => onInitialCountChange(e.target.value)}
-                    />
-                )}
             </div>
         </td>
 
-        {/* Ölü - w-12 */}
+        {/* Ölü */}
         <td className="p-0 border-r border-slate-100 w-12">
             <input 
                 type="number" 
@@ -160,7 +151,7 @@ export function ProductionTableRow({
             />
         </td>
 
-        {/* Verim % - w-14 */}
+        {/* Verim % */}
         <td className="p-0 border-r border-slate-100 w-14 bg-emerald-50/20">
             <div className="flex items-center justify-center h-8">
                 <span className={`font-bold text-[10px] ${row.yield < 85 ? 'text-amber-600' : 'text-emerald-700'}`}>
@@ -169,7 +160,7 @@ export function ProductionTableRow({
             </div>
         </td>
 
-        {/* Sağlam - w-14 */}
+        {/* Sağlam */}
         <td className="p-0 border-r border-slate-100 w-14">
             <input 
                 type="number" 
@@ -180,7 +171,7 @@ export function ProductionTableRow({
             />
         </td>
 
-        {/* Kırık - w-12 */}
+        {/* Kırık */}
         <td className="p-0 border-r border-slate-100 w-12 bg-slate-50/30">
             <input 
                 type="number" 
@@ -191,14 +182,14 @@ export function ProductionTableRow({
             />
         </td>
 
-        {/* Kırık % - w-12 */}
+        {/* Kırık % */}
         <td className="p-0 border-r border-slate-100 w-12 bg-slate-50/50">
             <div className="flex items-center justify-center h-8 text-[9px] text-slate-500 font-medium">
                 {brokenRate > 0 ? `%${brokenRate.toFixed(2).replace('.', ',')}` : '-'}
             </div>
         </td>
 
-        {/* Kirli - w-12 */}
+        {/* Kirli */}
         <td className="p-0 border-r border-slate-100 w-12 bg-slate-50/30">
             <input 
                 type="number" 
@@ -209,21 +200,21 @@ export function ProductionTableRow({
             />
         </td>
 
-        {/* Kirli % - w-12 */}
+        {/* Kirli % */}
         <td className="p-0 border-r border-slate-100 w-12 bg-slate-50/50">
             <div className="flex items-center justify-center h-8 text-[9px] text-slate-500 font-medium">
                 {dirtyRate > 0 ? `%${dirtyRate.toFixed(2).replace('.', ',')}` : '-'}
             </div>
         </td>
 
-        {/* Toplam - w-14 */}
+        {/* Toplam */}
         <td className="p-0 border-r border-slate-100 w-14 bg-amber-50/30">
             <div className="flex items-center justify-center h-8 font-mono font-black text-[10px] text-amber-800">
                 {row.eggCount > 0 ? row.eggCount : '-'}
             </div>
         </td>
 
-        {/* Gramaj - w-12 */}
+        {/* Gramaj */}
         <td className="p-0 border-r border-slate-100 w-12">
             <input 
                 type="number" 
@@ -235,7 +226,7 @@ export function ProductionTableRow({
             />
         </td>
 
-        {/* Notlar - w-24 */}
+        {/* Notlar */}
         <td className="p-0 w-24">
             <div className="relative h-8">
                 <input 

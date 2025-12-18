@@ -10,22 +10,51 @@ interface ProductionToolbarProps {
   saving: boolean;
   viewMode: 'table' | 'chart' | 'weekly';
   setViewMode: (mode: 'table' | 'chart' | 'weekly') => void;
+  
+  // YENİ: Başlangıç sayısı props olarak eklendi
+  initialCount: number;
+  onInitialCountChange: (val: string) => void;
 }
 
-export function ProductionToolbar({ onSave, rows, saving, viewMode, setViewMode }: ProductionToolbarProps) {
-  // Basit İstatistikler (Sadece Table modunda gösterilebilir veya genel kalabilir)
+export function ProductionToolbar({ 
+    onSave, 
+    rows, 
+    saving, 
+    viewMode, 
+    setViewMode,
+    initialCount,
+    onInitialCountChange
+}: ProductionToolbarProps) {
+  
+  // Basit İstatistikler
   const totalBirds = rows.length > 0 ? rows[rows.length - 1].currentBirds : 0;
   const totalEggs = rows.reduce((acc, row) => acc + row.eggCount, 0);
 
   return (
     <div className="flex items-center justify-between p-2 border-b border-slate-200 bg-white sticky top-0 z-30 h-14">
-      {/* SOL: Özet Bilgi */}
+      {/* SOL: Özet Bilgi ve Giriş Alanı */}
       <div className="flex items-center gap-4 px-2">
+        
+        {/* YENİ: Başlangıç Giriş Alanı */}
         <div className="flex flex-col">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mevcut Tavuk</span>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Başlangıç</span>
+          <input 
+             type="number" 
+             value={initialCount}
+             onChange={(e) => onInitialCountChange(e.target.value)}
+             className="text-sm font-black text-slate-700 font-mono w-20 border-b border-dashed border-slate-300 focus:border-emerald-500 focus:outline-none bg-transparent"
+          />
+        </div>
+
+        <div className="h-6 w-px bg-slate-200"></div>
+
+        <div className="flex flex-col">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Anlık Mevcut</span>
           <span className="text-sm font-black text-slate-700 font-mono">{totalBirds.toLocaleString()}</span>
         </div>
+
         <div className="h-6 w-px bg-slate-200"></div>
+
         <div className="flex flex-col">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Top. Yumurta</span>
           <span className="text-sm font-black text-amber-600 font-mono">{totalEggs.toLocaleString()}</span>
@@ -35,7 +64,7 @@ export function ProductionToolbar({ onSave, rows, saving, viewMode, setViewMode 
       {/* SAĞ: Görünüm Modları ve Kaydet */}
       <div className="flex items-center gap-4">
         
-        {/* Görünüm Değiştirici (Segmented Control) */}
+        {/* Görünüm Değiştirici */}
         <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
           <button
             onClick={() => setViewMode('table')}
@@ -77,7 +106,7 @@ export function ProductionToolbar({ onSave, rows, saving, viewMode, setViewMode 
           </button>
         </div>
 
-        {/* Kaydet Butonu - Sadece Tablo modunda aktif */}
+        {/* Kaydet Butonu */}
         <button 
           onClick={onSave}
           disabled={saving || viewMode !== 'table'} 
