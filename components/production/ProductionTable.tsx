@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useLayoutEffect, useMemo } from 'react';
 import { 
   eachDayOfInterval, isSameDay, startOfDay, addDays, format, differenceInWeeks 
 } from 'date-fns';
@@ -15,7 +15,8 @@ import { ProductionTableRow } from './ProductionTableRow';
 import { ProductionCharts } from './ProductionCharts';
 import { ProductionWeeklyTable } from './ProductionWeeklyTable';
 
-import { TableRowData } from './types';
+// TİPLERİ IMPORT ET
+import { TableRowData, WeeklyData } from './types';
 
 interface ProductionTableProps {
   flock: Flock;
@@ -31,6 +32,7 @@ export function ProductionTable({ flock }: ProductionTableProps) {
 
   const [localInitialCount, setLocalInitialCount] = useState(flock.initialCount);
   const hasScrolledRef = useRef(false);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setLocalInitialCount(flock.initialCount);
@@ -65,10 +67,9 @@ export function ProductionTable({ flock }: ProductionTableProps) {
     if (flock.id) fetchData();
   }, [fetchData]);
 
-  // 2. HESAPLAMA VE SATIR OLUŞTURMA
+  // 2. GÜNLÜK SATIR OLUŞTURMA
   useEffect(() => {
     const startDate = startOfDay(flock.hatchDate);
-    // İsteğe bağlı: Transfer tarihinden başlatmak istersen burayı değiştirebilirsin
     const endDate = addDays(new Date(), 30); 
     const days = eachDayOfInterval({ start: startDate, end: endDate });
 
@@ -85,21 +86,13 @@ export function ProductionTable({ flock }: ProductionTableProps) {
       const brokenEggCount = log?.brokenEggCount || 0;
       const dirtyEggCount = log?.dirtyEggCount || 0;
       
-      // YENİ: Sağlam Yumurta = Toplam - (Kırık + Kirli)
-      // Veritabanı tutarlılığı için eksiye düşmemesini sağlıyoruz
       const goodCount = Math.max(0, totalEggCount - brokenEggCount - dirtyEggCount);
-      
-      // YENİ: Notlar
       const notes = log?.notes || "";
-
       const avgWeight = log?.avgWeight || 0;
       const feedConsumed = log?.feedConsumed || 0;
       const waterConsumed = log?.waterConsumed || 0;
 
-      // Verim Hesabı: Toplam Yumurta / Mevcut
       const yieldVal = currentBirds > 0 ? (totalEggCount / currentBirds) * 100 : 0;
-      
-      // Oranlar (Toplam üzerinden)
       const brokenRate = totalEggCount > 0 ? (brokenEggCount / totalEggCount) * 100 : 0;
       const dirtyRate = totalEggCount > 0 ? (dirtyEggCount / totalEggCount) * 100 : 0;
       
@@ -116,14 +109,14 @@ export function ProductionTable({ flock }: ProductionTableProps) {
         date: day,
         logId: log?.id,
         mortality,
-        eggCount: totalEggCount, // DB'deki esas toplam
-        goodCount,               // Arayüz için hesaplanan
+        eggCount: totalEggCount,
+        goodCount,
         brokenEggCount,
         dirtyEggCount,
         avgWeight,
         feedConsumed,
         waterConsumed,
-        notes,                   // Not verisi
+        notes,
         currentBirds,
         yield: yieldVal,
         brokenRate,
@@ -137,6 +130,77 @@ export function ProductionTable({ flock }: ProductionTableProps) {
     setRows(newRows);
   }, [allLogs, localInitialCount, flock]); 
 
+  // 3. HAFTALIK AGGREGATION
+  const weeklyData = useMemo(() => {
+    if (rows.length === 0) return [];
+    
+    // HATA ÇÖZÜMÜ 1: Dizinin tipini kesin olarak belirtiyoruz.
+    const groups: WeeklyData[] = []; 
+    
+    // HATA ÇÖZÜMÜ 2: Değişkenin tipini kesin olarak belirtiyoruz.
+    let currentWeek: WeeklyData | null = null;
+    
+    let weightSum = 0;
+    let weightCount = 0;
+
+    rows.forEach(row => {
+        const weekKey = row.ageInWeeks.toString();
+
+        if (!currentWeek || currentWeek.key !== weekKey) {
+            if (currentWeek) {
+                // Önceki haftayı kapatırken 'avgWeight' ataması yapıyoruz.
+                // TypeScript artık currentWeek'in WeeklyData olduğunu bildiği için kızmayacak.
+                currentWeek.avgWeight = weightCount > 0 ? weightSum / weightCount : 0;
+                groups.push(currentWeek);
+            }
+            // Yeni hafta başlat
+            weightSum = 0;
+            weightCount = 0;
+            
+            // Tüm alanlarıyla tam bir WeeklyData objesi oluşturuyoruz
+            currentWeek = {
+                key: weekKey,
+                weekNum: row.ageInWeeks,
+                startDate: row.date,
+                endDate: row.date,
+                totalMortality: 0,
+                totalEggs: 0,
+                totalBroken: 0,
+                totalDirty: 0,
+                avgWeight: 0, // Başlangıç değeri
+                birdDays: 0,
+                startBirds: row.currentBirds + row.mortality,
+                days: 0,
+                notes: new Set<string>(),
+            };
+        }
+        
+        // Verileri işle
+        currentWeek.endDate = row.date;
+        currentWeek.totalMortality += row.mortality;
+        currentWeek.totalEggs += row.eggCount;
+        currentWeek.totalBroken += row.brokenEggCount;
+        currentWeek.totalDirty += row.dirtyEggCount;
+        currentWeek.birdDays += row.currentBirds;
+        
+        if (row.avgWeight > 0) {
+            weightSum += row.avgWeight;
+            weightCount++;
+        }
+        
+        if (row.notes) currentWeek.notes.add(row.notes);
+        currentWeek.days++;
+    });
+    
+    // Son haftayı ekle
+    if (currentWeek) {
+        currentWeek.avgWeight = weightCount > 0 ? weightSum / weightCount : 0;
+        groups.push(currentWeek);
+    }
+
+    return groups; 
+  }, [rows]);
+
   // Tab Değişikliğinde Scroll Reset
   useEffect(() => {
     if (viewMode !== 'table') {
@@ -144,50 +208,44 @@ export function ProductionTable({ flock }: ProductionTableProps) {
     }
   }, [viewMode]);
 
-  // Işınlanma (Otomatik Scroll)
+  // Işınlanma
   useLayoutEffect(() => {
-    if (viewMode === 'table' && !loading && rows.length > 0 && !hasScrolledRef.current) {
+    if (viewMode === 'table' && !loading && rows.length > 0 && !hasScrolledRef.current && tableContainerRef.current) {
         const todayId = `row-${format(new Date(), 'yyyy-MM-dd')}`;
         const todayEl = document.getElementById(todayId);
+
         if (todayEl) {
-            todayEl.scrollIntoView({ behavior: 'auto', block: 'start' });
+            const container = tableContainerRef.current;
+            const rowHeight = 40; 
+            const offsetRows = 3; 
+            const topPos = todayEl.offsetTop;
+            const scrollTo = Math.max(0, topPos - (rowHeight * offsetRows));
+            
+            container.scrollTo({ top: scrollTo, behavior: 'auto' });
             hasScrolledRef.current = true;
         }
     }
   }, [loading, rows, viewMode]);
 
-  // --- HANDLERS ---
-
-  const handleInitialCountChange = (value: string) => {
-    setLocalInitialCount(Number(value)); 
-  };
-
+  // Handlers
+  const handleInitialCountChange = (value: string) => { setLocalInitialCount(Number(value)); };
+  
   const handleCellChange = (index: number, field: keyof TableRowData, value: string) => {
     const newRows = [...rows];
     let row = { ...newRows[index], isDirty: true };
-
-    // String/Number ayrımı: Notlar text, diğerleri number
-    if (field === 'notes') {
-        row.notes = value;
-    } else {
+    if (field === 'notes') { row.notes = value; } else {
         const numVal = value === '' ? 0 : Number(value);
-        // @ts-ignore - Dinamik key ataması güvenli kabul edildi
+        // @ts-ignore
         row[field] = numVal;
     }
-
-    // Yumurta Sayıları Değiştiyse TOPLAMI Güncelle
     if (field === 'goodCount' || field === 'brokenEggCount' || field === 'dirtyEggCount') {
         row.eggCount = row.goodCount + row.brokenEggCount + row.dirtyEggCount;
     }
-
-    // Türetilmiş Değerleri (Verim, Oranlar) Tekrar Hesapla
     const current = row.currentBirds;
     const totalEggs = row.eggCount;
-
     row.yield = current > 0 ? (totalEggs / current) * 100 : 0;
     row.brokenRate = totalEggs > 0 ? (row.brokenEggCount / totalEggs) * 100 : 0;
     row.dirtyRate = totalEggs > 0 ? (row.dirtyEggCount / totalEggs) * 100 : 0;
-
     newRows[index] = row;
     setRows(newRows);
   };
@@ -197,22 +255,20 @@ export function ProductionTable({ flock }: ProductionTableProps) {
     try {
         const batch = writeBatch(db);
         const changes = rows.filter(r => r.isDirty);
-
         changes.forEach(row => {
           const docData = {
               flockId: flock.id,
               coopId: flock.coopId,
               date: row.date,
               mortality: row.mortality,
-              eggCount: row.eggCount, // Toplam olarak kaydediyoruz
+              eggCount: row.eggCount,
               avgWeight: row.avgWeight,
               brokenEggCount: row.brokenEggCount,
               dirtyEggCount: row.dirtyEggCount,
               feedConsumed: row.feedConsumed,
               waterConsumed: row.waterConsumed,
-              notes: row.notes || "" // Notları kaydet
+              notes: row.notes || ""
           };
-
           if (row.logId) {
               const ref = doc(db, "daily_logs", row.logId);
               batch.update(ref, docData);
@@ -221,69 +277,41 @@ export function ProductionTable({ flock }: ProductionTableProps) {
               batch.set(ref, docData);
           }
         });
-
-        // Başlangıç sayısı değiştiyse onu da güncelle
         if (localInitialCount !== flock.initialCount) {
             const flockRef = doc(db, "flocks", flock.id);
             batch.update(flockRef, { initialCount: localInitialCount });
         }
-
         await batch.commit();
         hasScrolledRef.current = false;
         await fetchData(); 
-        alert("Başarıyla kaydedildi.");
-    } catch (error) {
-        console.error("Kayıt Hatası:", error);
-        alert("Bir hata oluştu, konsolu kontrol ediniz.");
-    } finally {
-        setSaving(false);
-    }
+        alert("Kaydedildi.");
+    } catch (error) { console.error("Hata:", error); alert("Hata oluştu."); } finally { setSaving(false); }
   };
 
-  if (loading) return (
-    <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center h-64">
-        <Loader2 className="animate-spin mb-3 text-emerald-500" size={32} /> 
-        <span className="text-xs font-medium">Veriler yükleniyor...</span>
-    </div>
-  );
+  if (loading) return <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center h-64"><Loader2 className="animate-spin mb-3 text-emerald-500" size={32} /><span className="text-xs font-medium">Veriler yükleniyor...</span></div>;
 
   return (
     <div className="bg-white rounded-xl shadow border border-slate-200 overflow-hidden flex flex-col h-full max-h-[80vh]">
-      
-      <ProductionToolbar 
-        onSave={handleSave}
-        rows={rows}
-        saving={saving}
-        viewMode={viewMode}
-        setViewMode={setViewMode}
-      />
-
-      <div className="overflow-auto grow scroll-smooth relative bg-slate-50">
+      <ProductionToolbar onSave={handleSave} rows={rows} saving={saving} viewMode={viewMode} setViewMode={setViewMode} />
+      <div ref={tableContainerRef} className="overflow-auto grow scroll-smooth relative bg-slate-50">
         
         {viewMode === 'table' && (
              <table className="w-full text-xs text-left border-collapse border-spacing-0 bg-white">
                 <ProductionTableHeader />
                 <tbody className="divide-y divide-slate-100">
                     {rows.map((row, idx) => (
-                    <ProductionTableRow 
-                        key={idx} 
-                        index={idx}
-                        row={row}
-                        isFirstRow={idx === 0} 
-                        onCellChange={handleCellChange}
-                        onInitialCountChange={handleInitialCountChange}
-                    />
+                    <ProductionTableRow key={idx} index={idx} row={row} isFirstRow={idx === 0} onCellChange={handleCellChange} onInitialCountChange={handleInitialCountChange} />
                     ))}
                 </tbody>
              </table>
         )}
 
         {viewMode === 'weekly' && (
-            <ProductionWeeklyTable rows={rows} />
+            <ProductionWeeklyTable weeklyData={weeklyData} />
         )}
 
         {viewMode === 'chart' && (
-            <ProductionCharts data={rows} />
+            <ProductionCharts weeklyData={weeklyData} />
         )}
 
       </div>

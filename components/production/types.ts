@@ -10,10 +10,10 @@ export type TableRowData = {
   eggCount: number; // DB'deki Toplam
   
   avgWeight: number;
-  feedConsumed: number; // Günlükte tutulmaya devam edebilir ama haftalıkta override edilecek
+  feedConsumed: number;
   waterConsumed: number;
   
-  notes: string; // YENİ: Günlük Notlar
+  notes: string;
   
   // Hesaplananlar
   currentBirds: number; 
@@ -28,4 +28,24 @@ export type TableRowData = {
     title: string;
     color: string;
   } | null;
+};
+
+// BU TİP GÜNCELLENDİ: avgWeight EKLENDİ
+export type WeeklyData = {
+    key: string;
+    weekNum: number;
+    startDate: Date;
+    endDate: Date;
+    
+    totalMortality: number;
+    totalEggs: number;
+    totalBroken: number;
+    totalDirty: number;
+    
+    avgWeight: number; // <-- HATA ALINAN ALAN BURADAYDI
+    birdDays: number;
+    startBirds: number;
+    days: number;
+    
+    notes: Set<string>;
 };

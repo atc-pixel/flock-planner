@@ -14,16 +14,14 @@ interface ProductionTableRowProps {
   onInitialCountChange?: (value: string) => void;
 }
 
-// React.memo: Gereksiz render'ı engeller
-export const ProductionTableRow = React.memo(({ 
+export function ProductionTableRow({ 
     index, 
     row, 
     isFirstRow, 
     onCellChange,
     onInitialCountChange
-}: ProductionTableRowProps) => {
+}: ProductionTableRowProps) {
 
-  // Local State
   const [localData, setLocalData] = useState({
       mortality: row.mortality,
       goodCount: row.goodCount,
@@ -57,16 +55,15 @@ export const ProductionTableRow = React.memo(({
 
   const rowId = `row-${format(row.date, 'yyyy-MM-dd')}`;
   const isCurrentDay = isToday(row.date);
-  
-  // YENİ: Haftalık Zebra Efekti (Çift haftalar hafif gri)
   const isEvenWeek = row.ageInWeeks % 2 === 0;
 
+  // Satır renkleri
   let rowClass = "";
-  let stickyDateClass = ""; // Sticky kolon için özel renk
+  let stickyDateClass = "";
 
   if (isCurrentDay) {
-      rowClass = "bg-blue-50/60";
-      stickyDateClass = "bg-blue-50"; 
+      rowClass = "bg-amber-50/60";
+      stickyDateClass = "bg-amber-50"; 
   } else if (row.specialEvent) {
       if (row.specialEvent.color === 'blue') {
         rowClass = "bg-blue-100/30";
@@ -76,7 +73,6 @@ export const ProductionTableRow = React.memo(({
         stickyDateClass = "bg-emerald-50";
       }
   } else {
-      // Zebra Mantığı: Çiftler Gri, Tekler Beyaz
       if (isEvenWeek) {
         rowClass = "bg-slate-50 hover:bg-slate-100";
         stickyDateClass = "bg-slate-50 group-hover:bg-slate-100";
@@ -88,154 +84,176 @@ export const ProductionTableRow = React.memo(({
 
   const inputClass = "w-full h-8 text-center bg-transparent focus:bg-white outline-none focus:ring-2 focus:ring-inset rounded font-bold text-xs";
 
-  // Oran Hesaplamaları (Otomatik)
   const totalEggs = row.eggCount;
   const brokenRate = totalEggs > 0 ? (row.brokenEggCount / totalEggs) * 100 : 0;
   const dirtyRate = totalEggs > 0 ? (row.dirtyEggCount / totalEggs) * 100 : 0;
 
   return (
-    <tr id={rowId} className={`group transition-colors border-b border-slate-100 last:border-0 ${rowClass}`}>
-      
-      {/* 1. Tarih (Sticky) - Zebra Rengi Buraya da Uygulanmalı */}
-      <td className={`p-0 border-r border-slate-100 sticky left-0 z-10 w-20 ${stickyDateClass}`}>
-        <div className="flex flex-col items-center justify-center h-full py-1">
-            <span className={`font-bold text-[10px] ${isCurrentDay ? 'text-blue-600' : 'text-slate-700'}`}>
-                {format(row.date, 'd MMM', { locale: tr })}
-            </span>
-            <span className="text-[9px] text-slate-400 uppercase">
-                {format(row.date, 'EEEE', { locale: tr })}
-            </span>
-        </div>
-      </td>
+    <>
+      {/* 1. ÖZEL ETKİNLİK SATIRI */}
+      {row.specialEvent && (
+        <tr className="bg-slate-50">
+          <td colSpan={13} className="p-0 border-b border-slate-200">
+            <div className={`w-full text-center py-0.5 rounded-sm font-bold text-[9px] uppercase tracking-widest border-y ${row.specialEvent.color === 'blue' ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-emerald-50 text-emerald-700 border-emerald-100'}`}>
+              ✨ {row.specialEvent.title}
+            </div>
+          </td>
+        </tr>
+      )}
 
-      {/* 2. Hafta - w-8 */}
-      <td className="p-0 border-r border-slate-100 text-center w-8">
-        <span className="text-[9px] font-mono text-slate-400 font-bold">{row.ageInWeeks}</span>
-      </td>
-
-      {/* 3. Mevcut - w-14 */}
-      <td className="p-0 border-r border-slate-100 text-center w-14 bg-slate-50/30">
-        <div className="flex flex-col items-center justify-center">
-            <span className="font-mono font-bold text-slate-600 text-[10px]">
-                {row.currentBirds.toLocaleString()}
-            </span>
-            {isFirstRow && onInitialCountChange && (
-                <input 
-                    type="number"
-                    className="w-12 text-center text-[9px] border border-blue-200 rounded mt-0.5"
-                    defaultValue={row.currentBirds + row.mortality} 
-                    onBlur={(e) => onInitialCountChange(e.target.value)}
-                />
-            )}
-        </div>
-      </td>
-
-      {/* 4. Ölü - w-12 */}
-      <td className="p-0 border-r border-slate-100 w-12">
-        <input 
-            type="number" 
-            className={`${inputClass} text-red-600 focus:ring-red-200`}
-            value={localData.mortality === 0 ? '' : localData.mortality}
-            onChange={(e) => handleChange('mortality', e.target.value)}
-            onBlur={(e) => handleBlur('mortality', e.target.value)}
-        />
-      </td>
-
-      {/* 5. Verim % (ReadOnly) - w-14 */}
-      <td className="p-0 border-r border-slate-100 w-14 bg-emerald-50/20">
-        <div className="flex items-center justify-center h-8">
-            <span className={`font-bold text-[10px] ${row.yield < 85 ? 'text-amber-600' : 'text-emerald-700'}`}>
-                {row.yield > 0 ? `%${row.yield.toFixed(2).replace('.', ',')}` : '-'}
-            </span>
-        </div>
-      </td>
-
-      {/* 6. Sağlam - w-14 */}
-      <td className="p-0 border-r border-slate-100 w-14">
-        <input 
-            type="number" 
-            className={`${inputClass} text-emerald-700 focus:ring-emerald-200`}
-            value={localData.goodCount === 0 ? '' : localData.goodCount}
-            onChange={(e) => handleChange('goodCount', e.target.value)}
-            onBlur={(e) => handleBlur('goodCount', e.target.value)}
-        />
-      </td>
-
-      {/* 7. Kırık - w-12 */}
-      <td className="p-0 border-r border-slate-100 w-12 bg-slate-50/30">
-        <input 
-            type="number" 
-            className={`${inputClass} text-slate-600 focus:ring-slate-200`}
-            value={localData.brokenEggCount === 0 ? '' : localData.brokenEggCount}
-            onChange={(e) => handleChange('brokenEggCount', e.target.value)}
-            onBlur={(e) => handleBlur('brokenEggCount', e.target.value)}
-        />
-      </td>
-
-      {/* 8. Kırık % (YENİ - ReadOnly) - w-12 */}
-      <td className="p-0 border-r border-slate-100 w-12 bg-slate-50/50">
-         <div className="flex items-center justify-center h-8 text-[9px] text-slate-500 font-medium">
-            {brokenRate > 0 ? `%${brokenRate.toFixed(1).replace('.', ',')}` : '-'}
-         </div>
-      </td>
-
-      {/* 9. Kirli - w-12 */}
-      <td className="p-0 border-r border-slate-100 w-12 bg-slate-50/30">
-        <input 
-            type="number" 
-            className={`${inputClass} text-slate-600 focus:ring-slate-200`}
-            value={localData.dirtyEggCount === 0 ? '' : localData.dirtyEggCount}
-            onChange={(e) => handleChange('dirtyEggCount', e.target.value)}
-            onBlur={(e) => handleBlur('dirtyEggCount', e.target.value)}
-        />
-      </td>
-
-      {/* 10. Kirli % (YENİ - ReadOnly) - w-12 */}
-      <td className="p-0 border-r border-slate-100 w-12 bg-slate-50/50">
-         <div className="flex items-center justify-center h-8 text-[9px] text-slate-500 font-medium">
-            {dirtyRate > 0 ? `%${dirtyRate.toFixed(1).replace('.', ',')}` : '-'}
-         </div>
-      </td>
-
-      {/* 11. Toplam (ReadOnly) - w-14 */}
-      <td className="p-0 border-r border-slate-100 w-14 bg-amber-50/30">
-        <div className="flex items-center justify-center h-8 font-mono font-black text-[10px] text-amber-800">
-            {row.eggCount > 0 ? row.eggCount : '-'}
-        </div>
-      </td>
-
-      {/* 12. Gramaj - w-12 */}
-      <td className="p-0 border-r border-slate-100 w-12">
-        <input 
-            type="number" 
-            step="0.1"
-            className={`${inputClass} text-indigo-700 focus:ring-indigo-200`}
-            value={localData.avgWeight === 0 ? '' : localData.avgWeight}
-            onChange={(e) => handleChange('avgWeight', e.target.value)}
-            onBlur={(e) => handleBlur('avgWeight', e.target.value)}
-        />
-      </td>
-
-      {/* 13. Notlar - w-24 */}
-      <td className="p-0 w-24">
-         <div className="relative h-8">
-            <input 
-                type="text" 
-                className="w-full h-full px-2 text-left text-xs bg-transparent focus:bg-white outline-none focus:ring-2 focus:ring-yellow-200 text-slate-600 truncate focus:text-clip"
-                placeholder="Not..."
-                value={localData.notes}
-                onChange={(e) => handleChange('notes', e.target.value)}
-                onBlur={(e) => handleBlur('notes', e.target.value)}
-            />
-            {row.notes && (
-                <div className="absolute right-1 top-2 pointer-events-none text-yellow-500">
-                    <MessageSquare size={12} fill="currentColor" />
+      {/* 2. BUGÜN KIRMIZI ÇİZGİSİ (Yumuşak) */}
+      {isCurrentDay && (
+        <tr>
+            <td colSpan={13} className="p-0 border-t border-red-300 relative h-0 z-20 shadow-[0_1px_3px_rgba(252,165,165,0.4)]">
+                <div className="absolute right-0 -top-2 bg-red-400 text-white text-[8px] px-1.5 py-0 rounded-l font-bold shadow-sm opacity-90">
+                    BUGÜN
                 </div>
-            )}
-         </div>
-      </td>
-    </tr>
-  );
-});
+            </td>
+        </tr>
+      )}
 
-ProductionTableRow.displayName = 'ProductionTableRow';
+      {/* 3. ANA VERİ SATIRI */}
+      <tr id={rowId} className={`group transition-colors border-b border-slate-100 last:border-0 ${rowClass}`}>
+        
+        {/* Tarih - w-20 */}
+        <td className={`p-0 border-r border-slate-100 sticky left-0 z-10 w-20 ${stickyDateClass}`}>
+            <div className="flex flex-col items-center justify-center h-full py-1">
+                <span className={`font-bold text-[10px] ${isCurrentDay ? 'text-red-500' : 'text-slate-700'}`}>
+                    {format(row.date, 'd MMM', { locale: tr })}
+                </span>
+                <span className="text-[9px] text-slate-400 uppercase">
+                    {format(row.date, 'EEEE', { locale: tr })}
+                </span>
+            </div>
+        </td>
+
+        {/* Hafta - w-8 */}
+        <td className="p-0 border-r border-slate-100 text-center w-8">
+            <span className="text-[9px] font-mono text-slate-400 font-bold">{row.ageInWeeks}</span>
+        </td>
+
+        {/* Mevcut - w-14 */}
+        <td className="p-0 border-r border-slate-100 text-center w-14 bg-slate-50/30">
+            <div className="flex flex-col items-center justify-center">
+                <span className="font-mono font-bold text-slate-600 text-[10px]">
+                    {row.currentBirds.toLocaleString()}
+                </span>
+                {isFirstRow && onInitialCountChange && (
+                    <input 
+                        type="number"
+                        className="w-12 text-center text-[9px] border border-blue-200 rounded mt-0.5"
+                        defaultValue={row.currentBirds + row.mortality} 
+                        onBlur={(e) => onInitialCountChange(e.target.value)}
+                    />
+                )}
+            </div>
+        </td>
+
+        {/* Ölü - w-12 */}
+        <td className="p-0 border-r border-slate-100 w-12">
+            <input 
+                type="number" 
+                className={`${inputClass} text-red-600 focus:ring-red-200`}
+                value={localData.mortality === 0 ? '' : localData.mortality}
+                onChange={(e) => handleChange('mortality', e.target.value)}
+                onBlur={(e) => handleBlur('mortality', e.target.value)}
+            />
+        </td>
+
+        {/* Verim % - w-14 */}
+        <td className="p-0 border-r border-slate-100 w-14 bg-emerald-50/20">
+            <div className="flex items-center justify-center h-8">
+                <span className={`font-bold text-[10px] ${row.yield < 85 ? 'text-amber-600' : 'text-emerald-700'}`}>
+                    {row.yield > 0 ? `%${row.yield.toFixed(2).replace('.', ',')}` : '-'}
+                </span>
+            </div>
+        </td>
+
+        {/* Sağlam - w-14 */}
+        <td className="p-0 border-r border-slate-100 w-14">
+            <input 
+                type="number" 
+                className={`${inputClass} text-emerald-700 focus:ring-emerald-200`}
+                value={localData.goodCount === 0 ? '' : localData.goodCount}
+                onChange={(e) => handleChange('goodCount', e.target.value)}
+                onBlur={(e) => handleBlur('goodCount', e.target.value)}
+            />
+        </td>
+
+        {/* Kırık - w-12 */}
+        <td className="p-0 border-r border-slate-100 w-12 bg-slate-50/30">
+            <input 
+                type="number" 
+                className={`${inputClass} text-slate-600 focus:ring-slate-200`}
+                value={localData.brokenEggCount === 0 ? '' : localData.brokenEggCount}
+                onChange={(e) => handleChange('brokenEggCount', e.target.value)}
+                onBlur={(e) => handleBlur('brokenEggCount', e.target.value)}
+            />
+        </td>
+
+        {/* Kırık % - w-12 */}
+        <td className="p-0 border-r border-slate-100 w-12 bg-slate-50/50">
+            <div className="flex items-center justify-center h-8 text-[9px] text-slate-500 font-medium">
+                {brokenRate > 0 ? `%${brokenRate.toFixed(2).replace('.', ',')}` : '-'}
+            </div>
+        </td>
+
+        {/* Kirli - w-12 */}
+        <td className="p-0 border-r border-slate-100 w-12 bg-slate-50/30">
+            <input 
+                type="number" 
+                className={`${inputClass} text-slate-600 focus:ring-slate-200`}
+                value={localData.dirtyEggCount === 0 ? '' : localData.dirtyEggCount}
+                onChange={(e) => handleChange('dirtyEggCount', e.target.value)}
+                onBlur={(e) => handleBlur('dirtyEggCount', e.target.value)}
+            />
+        </td>
+
+        {/* Kirli % - w-12 */}
+        <td className="p-0 border-r border-slate-100 w-12 bg-slate-50/50">
+            <div className="flex items-center justify-center h-8 text-[9px] text-slate-500 font-medium">
+                {dirtyRate > 0 ? `%${dirtyRate.toFixed(2).replace('.', ',')}` : '-'}
+            </div>
+        </td>
+
+        {/* Toplam - w-14 */}
+        <td className="p-0 border-r border-slate-100 w-14 bg-amber-50/30">
+            <div className="flex items-center justify-center h-8 font-mono font-black text-[10px] text-amber-800">
+                {row.eggCount > 0 ? row.eggCount : '-'}
+            </div>
+        </td>
+
+        {/* Gramaj - w-12 */}
+        <td className="p-0 border-r border-slate-100 w-12">
+            <input 
+                type="number" 
+                step="0.1"
+                className={`${inputClass} text-indigo-700 focus:ring-indigo-200`}
+                value={localData.avgWeight === 0 ? '' : localData.avgWeight}
+                onChange={(e) => handleChange('avgWeight', e.target.value)}
+                onBlur={(e) => handleBlur('avgWeight', e.target.value)}
+            />
+        </td>
+
+        {/* Notlar - w-24 */}
+        <td className="p-0 w-24">
+            <div className="relative h-8">
+                <input 
+                    type="text" 
+                    className="w-full h-full px-2 text-left text-xs bg-transparent focus:bg-white outline-none focus:ring-2 focus:ring-yellow-200 text-slate-600 truncate focus:text-clip"
+                    placeholder="Not..."
+                    value={localData.notes}
+                    onChange={(e) => handleChange('notes', e.target.value)}
+                    onBlur={(e) => handleBlur('notes', e.target.value)}
+                />
+                {row.notes && (
+                    <div className="absolute right-1 top-2 pointer-events-none text-yellow-500">
+                        <MessageSquare size={12} fill="currentColor" />
+                    </div>
+                )}
+            </div>
+        </td>
+      </tr>
+    </>
+  );
+}
