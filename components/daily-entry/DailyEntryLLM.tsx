@@ -48,9 +48,14 @@ export default function DailyEntryLLM() {
         coop: parsed?.coop ?? "-",
         date: parsed?.date ?? "-",
         rows,
+        back: {
+          dirty: parsed?.back?.dirty ?? "-",
+          broken: parsed?.back?.broken ?? "-",
+        },
         note: parsed?.note ?? "-",
         bottomRight: parsed?.bottomRight ?? "-",
       });
+
     } catch (e: any) {
       setApiError(String(e?.message ?? e));
     } finally {
