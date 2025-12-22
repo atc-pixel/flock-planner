@@ -150,15 +150,7 @@ export default function DailyEntryLLM() {
         <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <SlipEditor
             slip={slip}
-            derived={derived}
-            flocksLoading={flocksLoading}
-            flocks={flocks}
-            selectedFlockId={selectedFlockId}
-            mortality={mortality}
-            onHeaderChange={onHeaderChange}
-            onCellChange={onCellChange}
-            onFlockChange={setSelectedFlockId}
-            onMortalityChange={setMortality}
+            onChange={(next) => setSlip(next)}
           />
           <JsonPanels slip={slip} draft={draft} />
         </section>
