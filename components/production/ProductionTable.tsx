@@ -130,6 +130,14 @@ export function ProductionTable({ flock }: ProductionTableProps) {
     setRows(newRows);
   }, [allLogs, localInitialCount, flock]); 
 
+
+  const week18Day1Count = useMemo(() => {
+    const firstWeek18 = rows.find(r => r.ageInWeeks === 18);
+    if (!firstWeek18) return 0;
+    // o günün başındaki mevcut
+    return (firstWeek18.currentBirds || 0) + (firstWeek18.mortality || 0);
+  }, [rows]);
+
   // 3. HAFTALIK AGGREGATION (GÜNCELLENDİ: TS Güvenli Yapı)
   const weeklyData = useMemo<WeeklyData[]>(() => {
     if (rows.length === 0) return [];
@@ -303,9 +311,9 @@ export function ProductionTable({ flock }: ProductionTableProps) {
         saving={saving} 
         viewMode={viewMode} 
         setViewMode={setViewMode} 
-        // YENİ: Başlangıç sayısı toolbar'a taşındı
         initialCount={localInitialCount}
         onInitialCountChange={handleInitialCountChange}
+        week18Day1Count={week18Day1Count}
       />
       <div ref={tableContainerRef} className="overflow-auto grow scroll-smooth relative bg-slate-50">
         
