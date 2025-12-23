@@ -41,4 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 #seviceAccount
-serviceAccount
+# secrets
+serviceAccount.json
+*.pem
+*.p12
