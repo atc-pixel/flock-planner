@@ -97,7 +97,9 @@ export function ProductionWeeklyTable({ weeklyData }: ProductionWeeklyTableProps
                     const feed = weeklyFeed[docId] || 0;
                     
                     // Verim Hesabı: Hen-Day
-                    const henDayYield = week.birdDays > 0 ? (week.totalEggs / week.birdDays) * 100 : 0;
+                    // Verim Hesabı: Hen-Day
+
+                    const henDayYield = week.avgYield;
                     
                     const brokenRate = week.totalEggs > 0 ? (week.totalBroken / week.totalEggs) * 100 : 0;
                     const dirtyRate = week.totalEggs > 0 ? (week.totalDirty / week.totalEggs) * 100 : 0;
@@ -148,3 +150,4 @@ export function ProductionWeeklyTable({ weeklyData }: ProductionWeeklyTableProps
     </div>
   );
 }
+

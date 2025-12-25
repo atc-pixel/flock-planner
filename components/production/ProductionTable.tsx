@@ -138,13 +138,13 @@ export function ProductionTable({ flock }: ProductionTableProps) {
     return (firstWeek18.currentBirds || 0) + (firstWeek18.mortality || 0);
   }, [rows]);
 
-  // 3. HAFTALIK AGGREGATION (GÜNCELLENDİ: TS Güvenli Yapı)
+  // 3. HAFTALIK AGGREGATION (GÜNCELLENDİ: Yield = log girilmiş günlerin günlük yield ortalaması)
   const weeklyData = useMemo<WeeklyData[]>(() => {
     if (rows.length === 0) return [];
 
     // Verileri haftalara göre grupla
     const rowsByWeek: Record<string, TableRowData[]> = {};
-    rows.forEach(row => {
+    rows.forEach((row) => {
       const weekKey = row.ageInWeeks.toString();
       if (!rowsByWeek[weekKey]) rowsByWeek[weekKey] = [];
       rowsByWeek[weekKey].push(row);
@@ -152,56 +152,86 @@ export function ProductionTable({ flock }: ProductionTableProps) {
 
     // Grupları WeeklyData objesine çevir
     const groups: WeeklyData[] = Object.values(rowsByWeek).map((weekRows) => {
-      const firstDay = weekRows[0];
-      const lastDay = weekRows[weekRows.length - 1];
-      
+      // Tarih sırası garanti olsun
+      const sortedWeekRows = [...weekRows].sort(
+        (a, b) => a.date.getTime() - b.date.getTime()
+      );
+
+      const firstDay = sortedWeekRows[0];
+      const lastDay = sortedWeekRows[sortedWeekRows.length - 1];
+
       let weightSum = 0;
       let weightCount = 0;
+
+      // ✅ İstenen: Günlük yield ortalaması (sadece veri girilmiş günler)
+      let yieldSum = 0;
+      let yieldCount = 0;
+
       const notesSet = new Set<string>();
 
-      const weekSummary = weekRows.reduce((acc, row) => {
+      const weekSummary = sortedWeekRows.reduce(
+        (acc, row) => {
           acc.totalMortality += row.mortality;
           acc.totalEggs += row.eggCount;
           acc.totalBroken += row.brokenEggCount;
           acc.totalDirty += row.dirtyEggCount;
           acc.birdDays += row.currentBirds;
-          
+
           if (row.avgWeight > 0) {
-              weightSum += row.avgWeight;
-              weightCount++;
+            weightSum += row.avgWeight;
+            weightCount++;
           }
+
+          // ✅ Yield ortalamasına sadece log'u olan günleri dahil et.
+          // (boş günler otomatik satır ama logId yok)
+          if (row.logId && row.currentBirds > 0) {
+            const dailyYield = (row.eggCount / row.currentBirds) * 100;
+            if (Number.isFinite(dailyYield)) {
+              yieldSum += dailyYield;
+              yieldCount++;
+            }
+          }
+
           if (row.notes) notesSet.add(row.notes);
           return acc;
-      }, {
+        },
+        {
           totalMortality: 0,
           totalEggs: 0,
           totalBroken: 0,
           totalDirty: 0,
-          birdDays: 0
-      });
+          birdDays: 0,
+        }
+      );
 
       return {
-          key: firstDay.ageInWeeks.toString(),
-          weekNum: firstDay.ageInWeeks,
-          startDate: firstDay.date,
-          endDate: lastDay.date,
-          
-          totalMortality: weekSummary.totalMortality,
-          totalEggs: weekSummary.totalEggs,
-          totalBroken: weekSummary.totalBroken,
-          totalDirty: weekSummary.totalDirty,
-          
-          avgWeight: weightCount > 0 ? weightSum / weightCount : 0,
-          
-          birdDays: weekSummary.birdDays,
-          startBirds: firstDay.currentBirds + firstDay.mortality, 
-          days: weekRows.length,
-          notes: notesSet
+        key: firstDay.ageInWeeks.toString(),
+        weekNum: firstDay.ageInWeeks,
+        startDate: firstDay.date,
+        endDate: lastDay.date,
+
+        totalMortality: weekSummary.totalMortality,
+        totalEggs: weekSummary.totalEggs,
+        totalBroken: weekSummary.totalBroken,
+        totalDirty: weekSummary.totalDirty,
+
+        avgWeight: weightCount > 0 ? weightSum / weightCount : 0,
+
+        // ✅ Haftalık % Verim = veri girilmiş günlerin günlük yield ortalaması
+        // 3 gün veri varsa /3, 7 gün varsa /7
+        avgYield: yieldCount > 0 ? yieldSum / yieldCount : 0,
+
+        birdDays: weekSummary.birdDays,
+        startBirds: firstDay.currentBirds + firstDay.mortality,
+        days: sortedWeekRows.length,
+        notes: notesSet,
       };
     });
 
     return groups.sort((a, b) => a.weekNum - b.weekNum);
   }, [rows]);
+
+
 
 
   // Tab Değişikliğinde Scroll Reset

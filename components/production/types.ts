@@ -42,10 +42,12 @@ export type WeeklyData = {
     totalBroken: number;
     totalDirty: number;
     
-    avgWeight: number; // <-- HATA ALINAN ALAN BURADAYDI
+    avgWeight: number; 
     birdDays: number;
     startBirds: number;
     days: number;
+
+    avgYield: number
     
     notes: Set<string>;
 };
