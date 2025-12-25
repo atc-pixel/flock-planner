@@ -73,7 +73,7 @@ export function ProductionCharts({ weeklyData }: ProductionChartsProps) {
           <ComposedChart data={chartData} syncId={syncId} margin={commonMargin}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
             <XAxis dataKey="name" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
-            <YAxis domain={[0, 500]} tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
+            <YAxis domain={[0, 5]} tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
             <Tooltip contentStyle={{ fontSize: '12px', borderRadius: '8px' }} />
             <Line type="monotone" dataKey="broken" name="Kırık %" stroke="#ef4444" strokeWidth={2} dot={false} />
             <Line type="monotone" dataKey="dirty" name="Kirli %" stroke="#f59e0b" strokeWidth={2} dot={false} />
