@@ -6,12 +6,14 @@ import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import {
   addDays,
+  addMonths,
   endOfMonth,
   format,
   isAfter,
   isBefore,
   isValid,
   startOfMonth,
+  
 } from 'date-fns';
 import { Flock } from '@/lib/utils';
 
@@ -271,12 +273,20 @@ export function PdfExportModal({ isOpen, onClose, flock }: PdfExportModalProps) 
   const monthlyAuto = useMemo<MonthlyAuto[]>(() => {
     if (!flock.hatchDate || !isValid(flock.hatchDate)) return [];
 
+    // Ay listesi: hatchDate ayından başla, her zaman bugünün ayı + 2 ay'a kadar göster.
+    // Veri yoksa zaten 0'lar gelir.
     const start = flock.hatchDate;
-    const lastLogDate = logs.length ? logs[logs.length - 1].date : start;
 
-    // İçinde bulunduğumuz ay mutlaka listelensin
+    // timelineEnd sadece günlük log okumayı sınırlandırmak için.
+    // (İleride importla ileri tarihli log gelirse yine kapsasın)
+    const lastLogDate = logs.length ? logs[logs.length - 1].date : start;
     const today = new Date();
-    const end = isAfter(today, lastLogDate) ? today : lastLogDate;
+    const timelineEnd = isAfter(today, lastLogDate) ? today : lastLogDate;
+
+    // Ay dropdown üst sınırı: bugünün ayı + 2 ay
+    const monthsUpperBound = endOfMonth(addMonths(today, 2));
+
+
 
 
     const logByKey: Record<string, DailyLog> = {};
@@ -288,7 +298,12 @@ export function PdfExportModal({ isOpen, onClose, flock }: PdfExportModalProps) 
     const months: MonthlyAuto[] = [];
 
     let mStart = startOfMonth(start);
-    const mEnd = startOfMonth(end);
+    // İçinde bulunduğumuz ay mutlaka listelensin.
+    // Eğer günlük log'lar bugünden ileri tarihteyse (import vs.), o ayları da kapsasın.
+    const todayMonth = startOfMonth(new Date());
+    const endMonth = startOfMonth(monthsUpperBound);
+    const mEnd = isAfter(endMonth, todayMonth) ? endMonth : todayMonth;
+
 
     while (!isAfter(mStart, mEnd)) {
       const monthKey = format(mStart, 'yyyy-MM');
@@ -305,7 +320,7 @@ export function PdfExportModal({ isOpen, onClose, flock }: PdfExportModalProps) 
       let yieldCount = 0;
 
       for (let d = mStart; !isAfter(d, monthEnd); d = addDays(d, 1)) {
-        if (isBefore(d, start) || isAfter(d, end)) continue;
+        if (isBefore(d, start) || isAfter(d, timelineEnd)) continue;
 
         const key = format(d, 'yyyy-MM-dd');
         const log = logByKey[key];
