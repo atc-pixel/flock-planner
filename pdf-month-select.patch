@@ -1,0 +1,319 @@
+--- a/components/production/PdfExportModal.tsx
++++ b/components/production/PdfExportModal.tsx
+@@ -191,6 +191,9 @@
+   const [error, setError] = useState<string | null>(null);
+   const [logs, setLogs] = useState<DailyLog[]>([]);
+ 
++  // Selected month (yyyy-MM). We only show/export one month at a time.
++  const [selectedMonthKey, setSelectedMonthKey] = useState<string>('');
++
+   // monthKey -> manual inputs
+   const [manualByMonth, setManualByMonth] = useState<Record<string, ManualMonthlyInputs>>({});
+ 
+@@ -406,6 +409,24 @@
+     });
+   }, [monthlyAuto, manualByMonth]);
+ 
++  // Keep selection valid when month list changes.
++  useEffect(() => {
++    if (!isOpen) return;
++    if (monthsWithDerivatives.length === 0) {
++      setSelectedMonthKey('');
++      return;
++    }
++    const exists = monthsWithDerivatives.some((m) => m.monthKey === selectedMonthKey);
++    if (!exists) {
++      // default to the latest month (last item)
++      setSelectedMonthKey(monthsWithDerivatives[monthsWithDerivatives.length - 1].monthKey);
++    }
++  }, [isOpen, monthsWithDerivatives, selectedMonthKey]);
++
++  const selectedMonth = useMemo(() => {
++    return monthsWithDerivatives.find((m) => m.monthKey === selectedMonthKey) || null;
++  }, [monthsWithDerivatives, selectedMonthKey]);
++
+   if (!isOpen) return null;
+ 
+   const updateManual = (monthKey: string, patch: Partial<ManualMonthlyInputs>) => {
+@@ -419,9 +440,10 @@
+   };
+ 
+   const handleExport = () => {
++    if (!selectedMonth) return;
+     const html = buildPrintHtml({
+       flock,
+-      months: monthsWithDerivatives,
++      months: [selectedMonth],
+     });
+ 
+     const w = window.open('', '_blank');
+@@ -492,7 +514,7 @@
+               <button
+                 onClick={handleExport}
+                 className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 transition-colors"
+-                disabled={loading || monthsWithDerivatives.length === 0}
++                disabled={loading || !selectedMonth}
+                 title="PDF Export (Yazdır)"
+               >
+                 <Printer size={14} />
+@@ -501,105 +523,157 @@
+             </div>
+           </div>
+ 
+-          <div className="border border-slate-200 rounded-xl overflow-auto max-h-[70vh]">
+-            <table className="w-full text-xs">
+-              <thead className="sticky top-0 bg-slate-100 border-b border-slate-200">
+-                <tr className="text-slate-600 font-bold">
+-                  <th className="text-left p-2">Ay</th>
+-                  <th className="text-right p-2">Toplam Yumurta</th>
+-                  <th className="text-right p-2">Ort. Verim</th>
+-                  <th className="text-right p-2">Kırık %</th>
+-                  <th className="text-right p-2">Kirli %</th>
+-                  <th className="text-right p-2">Ölüm %</th>
+-                  <th className="text-right p-2">Yem (ton)</th>
+-                  <th className="text-right p-2">Yem ₺/1000kg</th>
+-                  <th className="text-right p-2">İşçilik ₺</th>
+-                  <th className="text-right p-2">Elektrik ₺</th>
+-                  <th className="text-right p-2">Viol ₺</th>
+-                  <th className="text-right p-2">Yarka ₺</th>
+-                  <th className="text-right p-2">80H Yumurta</th>
+-                </tr>
+-              </thead>
+-              <tbody>
+-                {loading ? (
+-                  <tr><td colSpan={13} className="p-6 text-center text-slate-400 font-bold">Yükleniyor...</td></tr>
+-                ) : monthsWithDerivatives.length === 0 ? (
+-                  <tr><td colSpan={13} className="p-6 text-center text-slate-400 font-bold">Aylık veri bulunamadı.</td></tr>
+-                ) : (
+-                  monthsWithDerivatives.map((m) => (
+-                    <tr key={m.monthKey} className="border-b border-slate-100 hover:bg-slate-50">
+-                      <td className="p-2 font-bold text-slate-800 whitespace-nowrap">{m.monthLabel}</td>
+-                      <td className="p-2 text-right font-mono">{fmtNumberTR(m.totalEggs)}</td>
+-                      <td className="p-2 text-right font-mono">{fmtPctTR(m.avgYieldPct)}</td>
+-                      <td className="p-2 text-right font-mono">{fmtPctTR(m.crackedPct)}</td>
+-                      <td className="p-2 text-right font-mono">{fmtPctTR(m.dirtyPct)}</td>
+-                      <td className="p-2 text-right font-mono">{fmtPctTR(m.mortalityPct)}</td>
+-
+-                      <td className="p-2 text-right">
+-                        <input
+-                          value={m.manual.feedTons ?? ''}
+-                          onChange={(e) => updateManual(m.monthKey, { feedTons: e.target.value === '' ? undefined : Number(e.target.value) })}
+-                          className="w-24 text-right font-mono px-2 py-1 rounded border border-slate-200 focus:ring-2 focus:ring-slate-200"
+-                          placeholder="ton"
+-                        />
+-                      </td>
+-                      <td className="p-2 text-right">
+-                        <input
+-                          value={m.manual.feedPricePer1000kg ?? ''}
+-                          onChange={(e) => updateManual(m.monthKey, { feedPricePer1000kg: e.target.value === '' ? undefined : Number(e.target.value) })}
+-                          className="w-24 text-right font-mono px-2 py-1 rounded border border-slate-200 focus:ring-2 focus:ring-slate-200"
+-                          placeholder="₺"
+-                        />
+-                      </td>
+-                      <td className="p-2 text-right">
+-                        <input
+-                          value={m.manual.laborCost ?? ''}
+-                          onChange={(e) => updateManual(m.monthKey, { laborCost: e.target.value === '' ? undefined : Number(e.target.value) })}
+-                          className="w-24 text-right font-mono px-2 py-1 rounded border border-slate-200 focus:ring-2 focus:ring-slate-200"
+-                          placeholder="₺"
+-                        />
+-                      </td>
+-                      <td className="p-2 text-right">
+-                        <input
+-                          value={m.manual.electricityCost ?? ''}
+-                          onChange={(e) => updateManual(m.monthKey, { electricityCost: e.target.value === '' ? undefined : Number(e.target.value) })}
+-                          className="w-24 text-right font-mono px-2 py-1 rounded border border-slate-200 focus:ring-2 focus:ring-slate-200"
+-                          placeholder="₺"
+-                        />
+-                      </td>
+-                      <td className="p-2 text-right">
+-                        <input
+-                          value={m.manual.violCost ?? ''}
+-                          onChange={(e) => updateManual(m.monthKey, { violCost: e.target.value === '' ? undefined : Number(e.target.value) })}
+-                          className="w-24 text-right font-mono px-2 py-1 rounded border border-slate-200 focus:ring-2 focus:ring-slate-200"
+-                          placeholder="₺"
+-                        />
+-                      </td>
+-                      <td className="p-2 text-right">
+-                        <input
+-                          value={m.manual.pulletPrice ?? ''}
+-                          onChange={(e) => updateManual(m.monthKey, { pulletPrice: e.target.value === '' ? undefined : Number(e.target.value) })}
+-                          className="w-24 text-right font-mono px-2 py-1 rounded border border-slate-200 focus:ring-2 focus:ring-slate-200"
+-                          placeholder="₺"
+-                        />
+-                      </td>
+-                      <td className="p-2 text-right">
+-                        <input
+-                          value={m.manual.eggsAt80Weeks ?? ''}
+-                          onChange={(e) => updateManual(m.monthKey, { eggsAt80Weeks: e.target.value === '' ? undefined : Number(e.target.value) })}
+-                          className="w-24 text-right font-mono px-2 py-1 rounded border border-slate-200 focus:ring-2 focus:ring-slate-200"
+-                          placeholder="adet"
+-                        />
+-                      </td>
+-                    </tr>
+-                  ))
+-                )}
+-              </tbody>
+-            </table>
+-          </div>
+-
+-          <div className="mt-3 text-[11px] text-slate-500">
+-            Not: <strong>Viol paket fiyatı</strong> alanı şu sürümde PDF’de listeleniyor ama hesaplarda kullanılmıyor (formül talebinde doğrudan kullanılmadığı için).
+-          </div>
++          <div className="mb-3 flex flex-wrap items-center gap-2">
++            <div className="text-xs font-black text-slate-700">Ay Seç:</div>
++            <select
++              value={selectedMonthKey}
++              onChange={(e) => setSelectedMonthKey(e.target.value)}
++              className="text-xs font-bold px-3 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
++              disabled={loading || monthsWithDerivatives.length === 0}
++            >
++              {monthsWithDerivatives.length === 0 ? (
++                <option value="">Ay yok</option>
++              ) : (
++                monthsWithDerivatives.map((m) => (
++                  <option key={m.monthKey} value={m.monthKey}>
++                    {m.monthLabel}
++                  </option>
++                ))
++              )}
++            </select>
++          </div>
++
++          <div className="border border-slate-200 rounded-xl overflow-auto max-h-[70vh]">
++            {loading ? (
++              <div className="p-6 text-center text-slate-400 font-bold text-sm">Yükleniyor...</div>
++            ) : !selectedMonth ? (
++              <div className="p-6 text-center text-slate-400 font-bold text-sm">Seçili ay için veri bulunamadı.</div>
++            ) : (
++              <table className="w-full text-xs">
++                <thead className="sticky top-0 bg-slate-100 border-b border-slate-200">
++                  <tr className="text-slate-600 font-bold">
++                    <th className="text-left p-2">Kalem</th>
++                    <th className="text-right p-2">Değer</th>
++                  </tr>
++                </thead>
++                <tbody>
++                  {/* Otomatik (günlük tablodan hesaplanan) */}
++                  <tr><td colSpan={2} className="p-2 bg-slate-50 text-[11px] font-black text-slate-600 uppercase tracking-wider">Otomatik Hesaplanan</td></tr>
++                  <tr className="border-b border-slate-100"><td className="p-2 text-slate-700">Toplam Yumurta</td><td className="p-2 text-right font-mono font-black">{fmtNumberTR(selectedMonth.totalEggs)} adet</td></tr>
++                  <tr className="border-b border-slate-100"><td className="p-2 text-slate-700">Aylık Ortalama Verim</td><td className="p-2 text-right font-mono font-black">{fmtPctTR(selectedMonth.avgYieldPct)}</td></tr>
++                  <tr className="border-b border-slate-100"><td className="p-2 text-slate-700">Toplam Sağlam Yumurta</td><td className="p-2 text-right font-mono font-black">{fmtNumberTR(selectedMonth.totalGood)} adet</td></tr>
++                  <tr className="border-b border-slate-100"><td className="p-2 text-slate-700">Toplam Kırık Yumurta</td><td className="p-2 text-right font-mono font-black">{fmtNumberTR(selectedMonth.totalCracked)} adet</td></tr>
++                  <tr className="border-b border-slate-100"><td className="p-2 text-slate-700">Aylık Kırık Yumurta Yüzdesi</td><td className="p-2 text-right font-mono font-black">{fmtPctTR(selectedMonth.crackedPct)}</td></tr>
++                  <tr className="border-b border-slate-100"><td className="p-2 text-slate-700">Toplam Kirli Yumurta</td><td className="p-2 text-right font-mono font-black">{fmtNumberTR(selectedMonth.totalDirty)} adet</td></tr>
++                  <tr className="border-b border-slate-100"><td className="p-2 text-slate-700">Aylık Kirli Yumurta Yüzdesi</td><td className="p-2 text-right font-mono font-black">{fmtPctTR(selectedMonth.dirtyPct)}</td></tr>
++                  <tr className="border-b border-slate-100"><td className="p-2 text-slate-700">Aylık Hayvan Başı Yumurta Sayısı</td><td className="p-2 text-right font-mono font-black">{fmtNumberTR(selectedMonth.eggsPerBird, 2)} adet</td></tr>
++                  <tr className="border-b border-slate-100"><td className="p-2 text-slate-700">Aylık Toplam Ölüm</td><td className="p-2 text-right font-mono font-black">{fmtNumberTR(selectedMonth.totalMortality)} adet</td></tr>
++                  <tr className="border-b border-slate-100"><td className="p-2 text-slate-700">Aylık Ölüm Oranı</td><td className="p-2 text-right font-mono font-black">{fmtPctTR(selectedMonth.mortalityPct)}</td></tr>
++
++                  {/* Manuel */}
++                  <tr><td colSpan={2} className="p-2 bg-slate-50 text-[11px] font-black text-slate-600 uppercase tracking-wider">Manuel Giriş</td></tr>
++                  <tr className="border-b border-slate-100">
++                    <td className="p-2 text-slate-700">Toplam Yem Tüketimi (ton)</td>
++                    <td className="p-2 text-right">
++                      <input
++                        value={selectedMonth.manual.feedTons ?? ''}
++                        onChange={(e) => updateManual(selectedMonth.monthKey, { feedTons: e.target.value === '' ? undefined : Number(e.target.value) })}
++                        className="w-32 text-right font-mono px-2 py-1 rounded border border-slate-200 focus:ring-2 focus:ring-slate-200"
++                        placeholder="ton"
++                      />
++                    </td>
++                  </tr>
++                  <tr className="border-b border-slate-100">
++                    <td className="p-2 text-slate-700">Yem Fiyatı / 1000kg</td>
++                    <td className="p-2 text-right">
++                      <input
++                        value={selectedMonth.manual.feedPricePer1000kg ?? ''}
++                        onChange={(e) => updateManual(selectedMonth.monthKey, { feedPricePer1000kg: e.target.value === '' ? undefined : Number(e.target.value) })}
++                        className="w-32 text-right font-mono px-2 py-1 rounded border border-slate-200 focus:ring-2 focus:ring-slate-200"
++                        placeholder="₺"
++                      />
++                    </td>
++                  </tr>
++                  <tr className="border-b border-slate-100">
++                    <td className="p-2 text-slate-700">Viol Paket Fiyatı</td>
++                    <td className="p-2 text-right">
++                      <input
++                        value={selectedMonth.manual.violPackPrice ?? ''}
++                        onChange={(e) => updateManual(selectedMonth.monthKey, { violPackPrice: e.target.value === '' ? undefined : Number(e.target.value) })}
++                        className="w-32 text-right font-mono px-2 py-1 rounded border border-slate-200 focus:ring-2 focus:ring-slate-200"
++                        placeholder="₺"
++                      />
++                    </td>
++                  </tr>
++                  <tr className="border-b border-slate-100">
++                    <td className="p-2 text-slate-700">Aylık İşçilik Gideri</td>
++                    <td className="p-2 text-right">
++                      <input
++                        value={selectedMonth.manual.laborCost ?? ''}
++                        onChange={(e) => updateManual(selectedMonth.monthKey, { laborCost: e.target.value === '' ? undefined : Number(e.target.value) })}
++                        className="w-32 text-right font-mono px-2 py-1 rounded border border-slate-200 focus:ring-2 focus:ring-slate-200"
++                        placeholder="₺"
++                      />
++                    </td>
++                  </tr>
++                  <tr className="border-b border-slate-100">
++                    <td className="p-2 text-slate-700">Aylık Elektrik Gideri</td>
++                    <td className="p-2 text-right">
++                      <input
++                        value={selectedMonth.manual.electricityCost ?? ''}
++                        onChange={(e) => updateManual(selectedMonth.monthKey, { electricityCost: e.target.value === '' ? undefined : Number(e.target.value) })}
++                        className="w-32 text-right font-mono px-2 py-1 rounded border border-slate-200 focus:ring-2 focus:ring-slate-200"
++                        placeholder="₺"
++                      />
++                    </td>
++                  </tr>
++                  <tr className="border-b border-slate-100">
++                    <td className="p-2 text-slate-700">Aylık Viol Gideri</td>
++                    <td className="p-2 text-right">
++                      <input
++                        value={selectedMonth.manual.violCost ?? ''}
++                        onChange={(e) => updateManual(selectedMonth.monthKey, { violCost: e.target.value === '' ? undefined : Number(e.target.value) })}
++                        className="w-32 text-right font-mono px-2 py-1 rounded border border-slate-200 focus:ring-2 focus:ring-slate-200"
++                        placeholder="₺"
++                      />
++                    </td>
++                  </tr>
++                  <tr className="border-b border-slate-100">
++                    <td className="p-2 text-slate-700">Yarka Fiyatı</td>
++                    <td className="p-2 text-right">
++                      <input
++                        value={selectedMonth.manual.pulletPrice ?? ''}
++                        onChange={(e) => updateManual(selectedMonth.monthKey, { pulletPrice: e.target.value === '' ? undefined : Number(e.target.value) })}
++                        className="w-32 text-right font-mono px-2 py-1 rounded border border-slate-200 focus:ring-2 focus:ring-slate-200"
++                        placeholder="₺"
++                      />
++                    </td>
++                  </tr>
++                  <tr className="border-b border-slate-100">
++                    <td className="p-2 text-slate-700">80 Haftada Ortalama Yumurta Adedi</td>
++                    <td className="p-2 text-right">
++                      <input
++                        value={selectedMonth.manual.eggsAt80Weeks ?? ''}
++                        onChange={(e) => updateManual(selectedMonth.monthKey, { eggsAt80Weeks: e.target.value === '' ? undefined : Number(e.target.value) })}
++                        className="w-32 text-right font-mono px-2 py-1 rounded border border-slate-200 focus:ring-2 focus:ring-slate-200"
++                        placeholder="adet"
++                      />
++                    </td>
++                  </tr>
++
++                  {/* Türetilen maliyetler */}
++                  <tr><td colSpan={2} className="p-2 bg-slate-50 text-[11px] font-black text-slate-600 uppercase tracking-wider">Otomatik Hesaplanan (Maliyet)</td></tr>
++                  <tr className="border-b border-slate-100"><td className="p-2 text-slate-700">Hay. Başına Günlük Yem Tük.</td><td className="p-2 text-right font-mono font-black">{fmtNumberTR(selectedMonth.derived.hayBasinaGunlukYemKg, 3)} kg</td></tr>
++                  <tr className="border-b border-slate-100"><td className="p-2 text-slate-700">Yum. Başına Yem Tüketimi</td><td className="p-2 text-right font-mono font-black">{fmtNumberTR(selectedMonth.derived.yumBasinaYemKg, 5)} kg</td></tr>
++                  <tr className="border-b border-slate-100"><td className="p-2 text-slate-700">Yem / Yumurta Maliyeti</td><td className="p-2 text-right font-mono font-black">{fmtMoneyTR(selectedMonth.derived.cost_feedPerEgg)}</td></tr>
++                  <tr className="border-b border-slate-100"><td className="p-2 text-slate-700">Yarka / Yumurta Maliyeti</td><td className="p-2 text-right font-mono font-black">{fmtMoneyTR(selectedMonth.derived.cost_pulletPerEgg)}</td></tr>
++                  <tr className="border-b border-slate-100"><td className="p-2 text-slate-700">İşçilik / Yumurta Maliyeti</td><td className="p-2 text-right font-mono font-black">{fmtMoneyTR(selectedMonth.derived.cost_laborPerEgg)}</td></tr>
++                  <tr className="border-b border-slate-100"><td className="p-2 text-slate-700">Elektrik / Yumurta Maliyeti</td><td className="p-2 text-right font-mono font-black">{fmtMoneyTR(selectedMonth.derived.cost_electricityPerEgg)}</td></tr>
++                  <tr className="border-b border-slate-100"><td className="p-2 text-slate-700">Viol / Yumurta Maliyeti</td><td className="p-2 text-right font-mono font-black">{fmtMoneyTR(selectedMonth.derived.cost_violPerEgg)}</td></tr>
++                  <tr><td className="p-2 text-slate-900 font-black">Toplam Maliyet</td><td className="p-2 text-right font-mono font-black text-slate-900">{fmtMoneyTR(selectedMonth.derived.cost_totalPerEgg)}</td></tr>
++                </tbody>
++              </table>
++            )}
++          </div>
+         </div>
+       </div>
+     </div>
+   );
+ }

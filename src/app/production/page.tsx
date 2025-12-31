@@ -7,9 +7,10 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { collection, orderBy, query, onSnapshot } from 'firebase/firestore'; 
 import { isAfter, isBefore, addWeeks } from 'date-fns';
 import { Flock, INITIAL_COOPS, calculateTimeline } from '@/lib/utils';
-import { Bird, AlertCircle, History, X, Home, FileSpreadsheet } from 'lucide-react';
+import { Bird, AlertCircle, History, X, Home, FileSpreadsheet, FileDown } from 'lucide-react';
 
 import { ImportModal } from '@/components/production/ImportModal';
+import { PdfExportModal } from '@/components/production/PdfExportModal';
 import { Header } from '@/components/production/Header';
 import { ProductionTable } from '@/components/production/ProductionTable';
 
@@ -26,6 +27,7 @@ export default function ProductionPage() {
   const [showHistory, setShowHistory] = useState(false);
 
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isPdfExportOpen, setIsPdfExportOpen] = useState(false);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -162,6 +164,16 @@ export default function ProductionPage() {
                             <span className="hidden sm:inline">Excel Import</span>
                         </button>
 
+                        {/* PDF EXPORT BUTONU */}
+                        <button
+                            onClick={() => setIsPdfExportOpen(true)}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-sm"
+                            title="Aylık özet tabloyu PDF olarak dışa aktar"
+                        >
+                            <FileDown size={16} />
+                            <span className="hidden sm:inline">PDF Export</span>
+                        </button>
+
                         {/* GEÇMİŞ BUTONU */}
                         {historyFlocks.length > 0 && (
                             <div className="relative">
@@ -235,6 +247,14 @@ export default function ProductionPage() {
                 onSuccess={() => {
                     window.location.reload(); 
                 }}
+            />
+        )}
+
+        {selectedFlock && (
+            <PdfExportModal
+                isOpen={isPdfExportOpen}
+                onClose={() => setIsPdfExportOpen(false)}
+                flock={selectedFlock}
             />
         )}
 
