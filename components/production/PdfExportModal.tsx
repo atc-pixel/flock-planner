@@ -273,7 +273,11 @@ export function PdfExportModal({ isOpen, onClose, flock }: PdfExportModalProps) 
 
     const start = flock.hatchDate;
     const lastLogDate = logs.length ? logs[logs.length - 1].date : start;
-    const end = isAfter(new Date(), lastLogDate) ? new Date() : lastLogDate;
+
+    // İçinde bulunduğumuz ay mutlaka listelensin
+    const today = new Date();
+    const end = isAfter(today, lastLogDate) ? today : lastLogDate;
+
 
     const logByKey: Record<string, DailyLog> = {};
     for (const l of logs) {
