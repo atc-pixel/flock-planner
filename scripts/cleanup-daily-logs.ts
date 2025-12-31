@@ -1,9 +1,10 @@
 import "dotenv/config";
 import admin from "firebase-admin";
+import fs from "fs";
 
-// service account
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const serviceAccount = require("../serviceAccount.json");
+const serviceAccount = JSON.parse(
+  fs.readFileSync(new URL("../serviceAccount.json", import.meta.url), "utf-8")
+);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -11,101 +12,86 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-/* ---------------- helpers ---------------- */
-
-function toNum(v: any): number | null {
-  if (typeof v === "number") return v; // NaN dahil
-  if (typeof v === "string") {
-    const s = v.trim();
-    if (!s || s === "-") return null;
-    const n = Number(s);
-    return n;
-  }
-  return null;
-}
-
-function isZeroOrBad(n: number | null): boolean {
-  if (n === null) return true;        // yok / "-"
-  if (Number.isNaN(n)) return true;   // NaN
-  if (!Number.isFinite(n)) return true;
-  return n === 0;
-}
-
-/* ---------------- main ---------------- */
-
 async function cleanup() {
-  const cutoff = admin.firestore.Timestamp.fromDate(
-    new Date("2025-12-20T00:00:00")
-  );
+  const COOP_ID = "T6";
+  const cutoffDate = new Date("2025-08-16T00:00:00.000Z");
 
-  // ❗ Sadece date filtresi → index gerekmez
-  const snap = await db
-    .collection("daily_logs")
-    .where("date", ">=", cutoff)
-    .get();
+  // 🔴 önce false
+  const DO_DELETE = true;
 
-  console.log(`🔎 (date>=2025-12-20) toplam kayıt: ${snap.size}`);
+  console.log(`🔎 Hedef: daily_logs | coopId=${COOP_ID} | date < 2025-08-16`);
+  console.log(`🧪 Mod: ${DO_DELETE ? "DELETE" : "DRY RUN"}`);
+  console.log(`ℹ️ Index beklememek için: sadece coopId query + local date filtresi kullanılıyor.`);
 
-  const toDelete: admin.firestore.QueryDocumentSnapshot[] = [];
+  let totalFetched = 0;
+  let totalMatched = 0;
+  let totalDeleted = 0;
 
-  for (const d of snap.docs) {
-    const x = d.data() as any;
+  const pageSize = 450;
+  let lastDoc: admin.firestore.QueryDocumentSnapshot | null = null;
 
-    const eggRaw =
-      x.eggCount ?? x.eggs ?? x.egg_count ?? null;
-    const mortRaw =
-      x.mortality ?? x.dead ?? x.mortalityCount ?? null;
+  while (true) {
+    // ✅ Sadece tek-field where + orderBy(__name__) => composite index istemez
+    let q = db
+      .collection("daily_logs")
+      .where("coopId", "==", COOP_ID)
+      .orderBy(admin.firestore.FieldPath.documentId())
+      .limit(pageSize);
 
-    const egg = toNum(eggRaw);
-    const mort = toNum(mortRaw);
+    if (lastDoc) q = q.startAfter(lastDoc);
 
-    // 🔴 KURAL: hem yumurta hem ölü 0 / NaN / null ise
-    if (isZeroOrBad(egg) && isZeroOrBad(mort)) {
-      toDelete.push(d);
+    const snap = await q.get();
+    if (snap.empty) break;
+
+    totalFetched += snap.size;
+
+    // Local filtre: date < cutoff
+    const candidates = snap.docs.filter((d) => {
+      const x = d.data() as any;
+      const ts = x?.date;
+
+      // Firestore Timestamp bekliyoruz
+      const dt: Date | null = ts?.toDate?.() instanceof Date ? ts.toDate() : null;
+      if (!dt) return false;
+
+      return dt < cutoffDate;
+    });
+
+    totalMatched += candidates.length;
+
+    // ilk sayfadan örnek
+    if (totalFetched === snap.size) {
+      console.log(`📄 İlk sayfa (fetch=${snap.size}) | eşleşen=${candidates.length} örnek:`);
+      for (const d of candidates.slice(0, 10)) {
+        const x = d.data() as any;
+        console.log(` - ${d.id} | date=${x.date?.toDate?.()?.toISOString()}`);
+      }
     }
+
+    if (DO_DELETE && candidates.length > 0) {
+      const batch = db.batch();
+      for (const d of candidates) batch.delete(d.ref);
+      await batch.commit();
+      totalDeleted += candidates.length;
+      console.log(`🧹 Silindi: +${candidates.length} (Toplam: ${totalDeleted})`);
+    } else {
+      console.log(`🟡 DRY RUN: Bu sayfa fetch=${snap.size} | silinecek=${candidates.length} | toplam aday=${totalMatched}`);
+    }
+
+    lastDoc = snap.docs[snap.docs.length - 1];
   }
 
-  console.log(`🧹 Silinecek aday sayısı: ${toDelete.length}`);
-
-  // örnek log
-  for (const d of toDelete.slice(0, 10)) {
-    const x = d.data() as any;
-    console.log(
-      ` - ${d.id} | egg=${String(x.eggCount)} | mort=${String(x.mortality)}`
-    );
-  }
-
-  /* -------- DRY RUN -------- */
-  const DO_DELETE = true; // 🔴 önce false!
+  console.log("\n✅ Bitti");
+  console.log(`Toplam çekilen (coopId=T6): ${totalFetched}`);
+  console.log(`Toplam eşleşen (date<cutoff): ${totalMatched}`);
+  console.log(`Toplam silinen: ${DO_DELETE ? totalDeleted : 0}`);
 
   if (!DO_DELETE) {
-    console.log("🟡 DRY RUN: Silme yapılmadı. DO_DELETE=true yap.");
-    return;
+    console.log("\n➡️ Gerçek silme için DO_DELETE=true yapıp tekrar çalıştır.");
   }
-
-  /* -------- batch delete -------- */
-  let batch = db.batch();
-  let count = 0;
-  let deleted = 0;
-
-  for (const d of toDelete) {
-    batch.delete(d.ref);
-    count++;
-    deleted++;
-
-    if (count === 450) {
-      await batch.commit();
-      batch = db.batch();
-      count = 0;
-    }
-  }
-
-  if (count > 0) await batch.commit();
-
-  console.log(`✅ Temizlik tamamlandı. Silinen kayıt: ${deleted}`);
 }
 
 cleanup().catch((err) => {
-  console.error("🔥 Hata:", err);
+  console.error("🔥 Fatal:", err);
   process.exit(1);
 });

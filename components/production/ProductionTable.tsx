@@ -26,6 +26,16 @@ export function ProductionTable({ flock }: ProductionTableProps) {
   const [allLogs, setAllLogs] = useState<any[]>([]); 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // PERF: Avoid O(n^2) lookups when building day rows.
+  const logByDate = useMemo<Record<string, any>>(() => {
+    const map: Record<string, any> = {};
+    for (const l of allLogs) {
+      if (!l?.date) continue;
+      map[format(startOfDay(l.date), 'yyyy-MM-dd')] = l;
+    }
+    return map;
+  }, [allLogs]);
   
   const [viewMode, setViewMode] = useState<'table' | 'chart' | 'weekly'>('table');
 
@@ -75,7 +85,7 @@ export function ProductionTable({ flock }: ProductionTableProps) {
     let runningPopulation = localInitialCount || 0;
 
     const newRows: TableRowData[] = days.map(day => {
-      const log = allLogs.find(l => isSameDay(l.date, day));
+      const log = logByDate[format(day, 'yyyy-MM-dd')];
       const mortality = log?.mortality || 0;
       
       // YENİ MANTIK: Önce ölüyü düş, sonra mevcudu belirle.
@@ -366,7 +376,7 @@ export function ProductionTable({ flock }: ProductionTableProps) {
         )}
 
         {viewMode === 'weekly' && (
-            <ProductionWeeklyTable weeklyData={weeklyData} />
+            <ProductionWeeklyTable weeklyData={weeklyData} flockId={flock.id} />
         )}
 
         {viewMode === 'chart' && (

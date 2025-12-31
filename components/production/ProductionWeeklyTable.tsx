@@ -4,19 +4,20 @@ import React, { useEffect, useState, useLayoutEffect, useRef } from 'react';
 import { WeeklyData } from './types'; // YENİ TİP
 import { format, isWithinInterval } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import { doc, setDoc, onSnapshot, collection } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, collection, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Loader2 } from 'lucide-react';
 
 interface ProductionWeeklyTableProps {
   weeklyData: WeeklyData[]; // Artık hazır veriyi alıyor
+  flockId: string;
 }
 
 type WeeklyFeedData = {
     [weekKey: string]: number; 
 }
 
-export function ProductionWeeklyTable({ weeklyData }: ProductionWeeklyTableProps) {
+export function ProductionWeeklyTable({ weeklyData, flockId }: ProductionWeeklyTableProps) {
   const [weeklyFeed, setWeeklyFeed] = useState<WeeklyFeedData>({});
   const [loading, setLoading] = useState(true);
   const scrollRef = useRef<boolean>(false);
@@ -25,16 +26,18 @@ export function ProductionWeeklyTable({ weeklyData }: ProductionWeeklyTableProps
 
   // Firebase Yem Verisi
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "weekly_stats"), (snap) => {
-        const feeds: WeeklyFeedData = {};
-        snap.forEach(d => {
-            feeds[d.id] = d.data().feedConsumed;
-        });
-        setWeeklyFeed(feeds);
-        setLoading(false);
+    // IMPORTANT: Scope weekly stats to the active flock only.
+    const q = query(collection(db, "weekly_stats"), where("flockId", "==", flockId));
+    const unsub = onSnapshot(q, (snap) => {
+      const feeds: WeeklyFeedData = {};
+      snap.forEach((d) => {
+        feeds[d.id] = d.data().feedConsumed;
+      });
+      setWeeklyFeed(feeds);
+      setLoading(false);
     });
     return () => unsub();
-  }, []);
+  }, [flockId]);
 
   // IŞINLANMA
   useLayoutEffect(() => {
@@ -55,7 +58,6 @@ export function ProductionWeeklyTable({ weeklyData }: ProductionWeeklyTableProps
   }, [loading, weeklyData]);
 
   const handleFeedChange = async (weekKey: string, value: string) => {
-    const flockId = "demo_flock"; 
     const docId = `${flockId}_${weekKey}`;
     const val = Number(value);
     
@@ -63,6 +65,7 @@ export function ProductionWeeklyTable({ weeklyData }: ProductionWeeklyTableProps
 
     await setDoc(doc(db, "weekly_stats", docId), {
         feedConsumed: val,
+        flockId: flockId,
         weekKey: weekKey,
         updatedAt: new Date()
     }, { merge: true });
@@ -92,7 +95,6 @@ export function ProductionWeeklyTable({ weeklyData }: ProductionWeeklyTableProps
             </thead>
             <tbody className="divide-y divide-slate-100">
                 {weeklyData.map((week) => {
-                    const flockId = "demo_flock"; 
                     const docId = `${flockId}_${week.key}`;
                     const feed = weeklyFeed[docId] || 0;
                     
