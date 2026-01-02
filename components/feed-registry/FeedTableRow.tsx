@@ -85,7 +85,7 @@ export function FeedTableRow({ index, row, onCellChange, coops }: FeedTableRowPr
               <td className={`p-0 ${isLastCoop ? 'border-r-0' : 'border-r-2 border-slate-400'} ${colWidth} bg-emerald-50/30`} style={{ width: cellWidthPx }}>
                 <div className="flex items-center justify-center h-7">
                   <span className={`${avgFontSize} font-bold text-emerald-700`}>
-                    {data.avgConsumption !== null ? data.avgConsumption.toFixed(3) : '-'}
+                    {data.avgConsumption !== null ? data.avgConsumption.toFixed(2) : '-'}
                   </span>
                 </div>
               </td>
