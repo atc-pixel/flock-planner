@@ -12,6 +12,7 @@ import {
   Bird,
   LayoutGrid,
   Camera,
+  Wheat,
 } from 'lucide-react';
 
 export default function ModulesPage() {
@@ -75,6 +76,14 @@ export default function ModulesPage() {
       path: '/coop-status', // Henüz yapılmadı
       color: 'bg-purple-50 hover:border-purple-300 border-purple-100',
       textColor: 'text-purple-900',
+    },
+    {
+      title: 'Yem Kayıt',
+      description: 'Kümesler için yapılan yemlerin kaydı ve tüketim hesaplaması.',
+      icon: <Wheat size={32} className="text-orange-600" />,
+      path: '/feed-registry',
+      color: 'bg-orange-50 hover:border-orange-300 border-orange-100',
+      textColor: 'text-orange-900',
     },
   ];
 

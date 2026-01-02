@@ -67,7 +67,8 @@ export default function FlockPlanner() {
           transferDate: data.transferDate?.toDate(),
           exitDate: data.exitDate?.toDate(),
           name: data.name || '',
-          initialCount: data.initialCount || 0
+          initialCount: data.initialCount || 0,
+          chickCoopId: data.chickCoopId || undefined
         } as Flock;
       });
       setFlocks(liveData);
@@ -178,14 +179,33 @@ export default function FlockPlanner() {
 
   // Güncelleme
   const updateFlock = async (updatedFlock: Flock) => {
+    // Firebase undefined değerleri kabul etmez, null veya field'ı hiç eklememek gerekiyor
+    // chickCoopId undefined ise, field'ı kaldır
+    const updateData: any = {
+      ...updatedFlock,
+      hatchDate: updatedFlock.hatchDate,
+      transferDate: updatedFlock.transferDate || null,
+      exitDate: updatedFlock.exitDate || null,
+      moltDate: updatedFlock.moltDate || null,
+    };
+    
+    // undefined değerleri kaldır
+    if (updateData.chickCoopId === undefined) {
+      delete updateData.chickCoopId;
+    } else if (updateData.chickCoopId === null) {
+      updateData.chickCoopId = null;
+    }
+    
+    // Diğer undefined değerleri de kaldır
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) {
+        delete updateData[key];
+      }
+    });
     try {
       const flockRef = doc(db, "flocks", updatedFlock.id);
       await updateDoc(flockRef, {
-        ...updatedFlock,
-        hatchDate: updatedFlock.hatchDate,
-        moltDate: updatedFlock.moltDate || null,
-        transferDate: updatedFlock.transferDate || null,
-        exitDate: updatedFlock.exitDate || null,
+        ...updateData,
         updatedAt: new Date()
       });
     } catch (error) { console.error("Güncelleme hatası:", error); }

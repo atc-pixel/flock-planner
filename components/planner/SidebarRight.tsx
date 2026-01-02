@@ -136,6 +136,35 @@ export function SidebarRight({ selectedFlock, onUpdateFlock }: SidebarRightProps
                </p>
             </div>
 
+            {/* CİVCİV KÜMESİ SEÇİMİ (Sadece civciv fazında olan sürüler için) */}
+            {(!selectedFlock.transferDate || (selectedFlock.transferDate && new Date() < selectedFlock.transferDate)) && (
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-500 uppercase flex items-center gap-1.5">
+                  <Egg size={12} /> Civciv Kümesi
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {INITIAL_COOPS.filter(c => c.type === 'chick').map(chickCoop => (
+                    <button
+                      key={chickCoop.id}
+                      onClick={() => {
+                        const newChickCoopId = selectedFlock.chickCoopId === chickCoop.id ? null : chickCoop.id;
+                        onUpdateFlock({ ...selectedFlock, chickCoopId: newChickCoopId || undefined });
+                      }}
+                      className={`
+                        p-3 rounded-lg border-2 font-bold text-sm transition-all
+                        ${selectedFlock.chickCoopId === chickCoop.id
+                          ? 'bg-lime-500 text-white border-lime-600 shadow-md'
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-lime-300 hover:bg-lime-50'
+                        }
+                      `}
+                    >
+                      {chickCoop.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* TARİH SEÇİMLERİ */}
             <div className="space-y-1">
                 <label className="text-[11px] font-bold text-slate-500 uppercase flex items-center gap-1.5">

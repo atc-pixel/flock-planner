@@ -7,7 +7,8 @@ export type Coop = { id: string; name: string; type: 'hen' | 'chick' };
 export type Flock = { 
   id: string; 
   name: string;
-  coopId: string; 
+  coopId: string; // Transfer sonrası tavuk kümesi (hen)
+  chickCoopId?: string; // Transfer öncesi civciv kümesi (C1 veya C2) - sadece chick sürüleri için
   hatchDate: Date; 
   initialCount: number;
   isMolting: boolean; 

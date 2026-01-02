@@ -46,7 +46,8 @@ export default function ProductionPage() {
           transferDate: doc.data().transferDate?.toDate(),
           exitDate: doc.data().exitDate?.toDate(),
           name: doc.data().name || '#??',
-          initialCount: doc.data().initialCount || 0
+          initialCount: doc.data().initialCount || 0,
+          chickCoopId: doc.data().chickCoopId || undefined
         })) as Flock[];
 
         setAllFlocks(flockList);

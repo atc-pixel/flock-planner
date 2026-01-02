@@ -31,6 +31,7 @@ export function useFlocks() {
             exitDate: data.exitDate?.toDate?.() ?? data.exitDate,
             name: data.name || "#??",
             initialCount: data.initialCount || 0,
+            chickCoopId: data.chickCoopId || undefined,
           } as Flock;
         });
 
