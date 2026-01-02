@@ -3,8 +3,8 @@ export type FeedLog = {
   coopId: string; // Yem silosunun bulunduğu kümes
   flockId: string; // Hangi sürü için (transfer öncesi civciv kümesinde, sonrası tavuk kümesinde)
   date: Date;
-  producedFeed: number; // Yapılan yem (ton)
-  currentFeed: number | null; // Mevcut yem (ton) - null ise henüz girilmemiş
+  producedFeed: number; // Yapılan yem (kg)
+  currentFeed: number | null; // Mevcut yem (kg) - null ise henüz girilmemiş
   avgConsumption?: number; // Ortalama tüketim (gram/hayvan/gün) - otomatik hesaplanacak
 };
 

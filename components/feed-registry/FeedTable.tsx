@@ -227,14 +227,14 @@ export function FeedTable() {
 
     if (birdsCount <= 0) return null;
 
-    // Tüketim = Başlangıç mevcut + Yapılan yemler - Bitiş mevcut (ton cinsinden)
+    // Tüketim = Başlangıç mevcut + Yapılan yemler - Bitiş mevcut (kg cinsinden)
     const consumed = startCurrentFeed + totalProduced - endCurrentFeed;
     if (consumed < 0) return null;
 
-    // Ortalama = (Tüketim * 1000 * 1000) / Gün sayısı / Hayvan sayısı
-    // Tüketim ton cinsinden, gram'a çevirmek için 1000 * 1000 = 1,000,000 ile çarpıyoruz
+    // Ortalama = (Tüketim * 1000) / Gün sayısı / Hayvan sayısı
+    // Tüketim kg cinsinden, gram'a çevirmek için 1000 ile çarpıyoruz
     // Sonuç: gram/hayvan/gün
-    const avg = (consumed * 1000000) / days / birdsCount;
+    const avg = (consumed * 1000) / days / birdsCount;
     return avg;
   }, [getBirdsCountForDate]);
 
