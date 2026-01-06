@@ -59,8 +59,9 @@ function normalizeImageDataUrl(dataUrl: string): string {
   const encoding = match[2]?.toLowerCase() || "";
   const payload = match[3] || "";
 
-  // Sadece image/* izin ver
-  if (!mime.startsWith("image/")) {
+  // Sadece desteklenen image tiplerine izin ver; değilse JPEG'e zorla
+  const allowedMimes = ["image/jpeg", "image/png", "image/webp"];
+  if (!allowedMimes.includes(mime.toLowerCase())) {
     mime = "image/jpeg";
   }
 
