@@ -12,7 +12,7 @@ type ParsedRow = {
 
 type ParsedSlip = {
   coop: string | null;
-  date: string | null; // "YYYY-MM-DD" (LLM'e böyle isteyeceğiz)
+  date: string | null; // "DD-MM-YYYY" formatında (LLM'den geliyor)
   rows: ParsedRow[];
   note: string | null;
   bottomRight: string | null; // sağ alttaki 63,4 gibi

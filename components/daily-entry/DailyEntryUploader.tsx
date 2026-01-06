@@ -181,7 +181,7 @@ export default function DailyEntryUploader({
             </div>
 
             <div className="text-xs text-slate-500">
-              JPG / PNG / WEBP • Max {MAX_MB} MB
+              JPG / PNG / WEBP / HEIC • Max {MAX_MB} MB
             </div>
 
             {errorText ? (

@@ -91,25 +91,13 @@ export default function DailyEntryLLM() {
       coopId: slip.coop === "-" ? null : slip.coop,
       date: slip.date,
       eggCount: derived.eggCount,
-      dirtyEggCount: derived.dirtyEggCount,
-      brokenEggCount: derived.brokenEggCount,
+      dirtyEggCount: derived.dirtyEggCount, // zaten 30 ile çarpılmış (deriveDaily'de)
+      brokenEggCount: derived.brokenEggCount, // zaten 30 ile çarpılmış (deriveDaily'de)
       avgWeight: derived.avgWeight,
       flockId: selectedFlockId || null,
       mortality: mortality,
     };
   }, [slip, derived, selectedFlockId, mortality]);
-
-  function onHeaderChange<K extends keyof Omit<ParsedSlip, "rows">>(key: K, value: ParsedSlip[K]) {
-    setSlip((prev) => (prev ? { ...prev, [key]: value } : prev));
-  }
-
-  function onCellChange(level: number, key: keyof Omit<Row, "level">, value: Cell) {
-    setSlip((prev) => {
-      if (!prev) return prev;
-      const rows = prev.rows.map((r) => (r.level === level ? { ...r, [key]: value } : r));
-      return { ...prev, rows };
-    });
-  }
 
   async function saveToFirestore() {
     if (!slip || !derived || !draft) return;
@@ -145,8 +133,8 @@ export default function DailyEntryLLM() {
         coopId,
         flockId: selectedFlockId,
         eggCount: derived.eggCount,
-        dirtyEggCount: derived.dirtyEggCount,
-        brokenEggCount: derived.brokenEggCount,
+        dirtyEggCount: derived.dirtyEggCount, // zaten 30 ile çarpılmış (deriveDaily'de)
+        brokenEggCount: derived.brokenEggCount, // zaten 30 ile çarpılmış (deriveDaily'de)
         avgWeight: derived.avgWeight ?? null,
         mortality: mortality,
         date: dateTs,

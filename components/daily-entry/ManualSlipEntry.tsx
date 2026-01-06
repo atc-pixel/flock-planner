@@ -30,16 +30,37 @@ export default function ManualSlipEntry() {
 
   const [slip, setSlip] = useState<ParsedSlip>(() => makeEmptySlip());
   const [selectedFlockId, setSelectedFlockId] = useState<string>("");
+  const [mortality, setMortality] = useState<number>(0);
 
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [saveErr, setSaveErr] = useState<string | null>(null);
 
-  // Bugünün tarihi (local midnight) — hem date timestamp hem docId için
-  const today = useMemo(() => todayMidnightLocal(), []);
-  const todayYmd = useMemo(() => formatYYYYMMDD(today), [today]);
+  // Seçilen tarih (başlangıçta bugün, değiştirilebilir)
+  const [selectedDate, setSelectedDate] = useState<Date>(() => todayMidnightLocal());
+  const selectedDateYmd = useMemo(() => formatYYYYMMDD(selectedDate), [selectedDate]);
 
   const derived = useMemo(() => deriveDaily(slip), [slip]);
+
+  // Firestore draft - kaydedilecek veri önizlemesi
+  const firestoreDraft = useMemo(() => {
+    if (!selectedFlockId || slip.coop === "-") return null;
+
+    // Tarih için local date string (timezone sorununu önlemek için)
+    const datePreview = formatYYYYMMDD(selectedDate);
+
+    return {
+      coopId: slip.coop === "-" ? null : slip.coop,
+      flockId: selectedFlockId,
+      eggCount: derived.eggCount,
+      dirtyEggCount: derived.dirtyEggCount, // zaten 30 ile çarpılmış (deriveDaily'de)
+      brokenEggCount: derived.brokenEggCount, // zaten 30 ile çarpılmış (deriveDaily'de)
+      avgWeight: derived.avgWeight ?? null,
+      mortality: mortality,
+      date: datePreview, // YYYY-MM-DD formatında (Timestamp preview)
+      createdBy: "manual_entry",
+    };
+  }, [selectedFlockId, slip.coop, selectedDate, derived, mortality]);
 
   function resetFormKeepCoopAndFlock() {
     setSlip((prev) => ({
@@ -111,21 +132,21 @@ export default function ManualSlipEntry() {
 
     setSaving(true);
     try {
-      const dateTs = Timestamp.fromDate(today); // 00:00
+      const dateTs = Timestamp.fromDate(selectedDate); // 00:00
       const createdAt = serverTimestamp();
 
-      const docId = `${selectedFlockId}_${todayYmd}`;
+      const docId = `${selectedFlockId}_${selectedDateYmd}`;
 
       const payload = {
         coopId,
         flockId: selectedFlockId,
 
         eggCount: derived.eggCount,
-        dirtyEggCount: derived.dirtyEggCount,
-        brokenEggCount: derived.brokenEggCount,
+        dirtyEggCount: derived.dirtyEggCount, // zaten 30 ile çarpılmış (deriveDaily'de)
+        brokenEggCount: derived.brokenEggCount, // zaten 30 ile çarpılmış (deriveDaily'de)
         avgWeight: derived.avgWeight ?? null,
 
-        mortality: 0,
+        mortality: mortality,
 
         date: dateTs,
         createdAt,
@@ -203,9 +224,17 @@ export default function ManualSlipEntry() {
           <label className="block">
             <div className="text-xs font-medium text-slate-600">Tarih</div>
             <input
-              value={todayYmd}
-              readOnly
-              className="mt-1 w-full rounded-xl border border-slate-300 bg-slate-100 px-3 py-3 text-base text-slate-700"
+              type="date"
+              value={selectedDateYmd}
+              onChange={(e) => {
+                const dateValue = e.target.value;
+                if (dateValue) {
+                  const [yyyy, mm, dd] = dateValue.split("-").map(Number);
+                  const newDate = new Date(yyyy, mm - 1, dd, 0, 0, 0, 0);
+                  setSelectedDate(newDate);
+                }
+              }}
+              className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-base"
             />
           </label>
 
@@ -251,6 +280,20 @@ export default function ManualSlipEntry() {
               }
               className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-base"
               placeholder="56,6"
+            />
+          </label>
+
+          <label className="block sm:col-span-2">
+            <div className="text-xs font-medium text-slate-600">
+              Ölü Sayısı
+            </div>
+            <input
+              type="number"
+              min="0"
+              value={mortality}
+              onChange={(e) => setMortality(Number(e.target.value) || 0)}
+              className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-base"
+              placeholder="0"
             />
           </label>
         </div>
@@ -359,6 +402,21 @@ export default function ManualSlipEntry() {
           </div>
         </div>
       </section>
+
+      {/* Firestore Draft */}
+      {firestoreDraft && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-4">
+            <h3 className="text-base font-semibold text-slate-900">Firestore Draft (Daily Log)</h3>
+            <p className="mt-1 text-xs text-slate-600">
+              Bu veri Firestore'a kaydedilecek.
+            </p>
+          </div>
+          <pre className="max-h-[400px] overflow-auto rounded-2xl bg-slate-900 p-4 text-xs text-slate-100">
+{JSON.stringify(firestoreDraft, null, 2)}
+          </pre>
+        </section>
+      )}
     </div>
   );
 }

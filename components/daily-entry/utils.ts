@@ -77,11 +77,12 @@ export function deriveDaily(slip: ParsedSlip): DerivedDaily {
   const backBroken = toNumberOrZero(slip.back?.broken ?? "-");
 
   // 4) Yeni kurallar
-  const dirtyEggCount = dirtyFromFloors + backDirty;
-  const brokenEggCount = brokenFromFloors + backBroken;
-
-  const eggCount =
-    maxSolid - 30 * (backDirty + backBroken);
+  // dirtyEggCount = (kolonlar kirli + arka kirli) * 30
+  const dirtyEggCount = (dirtyFromFloors + backDirty) * 30;
+  // brokenEggCount = (kolonlar kırık + arka kırık) * 30
+  const brokenEggCount = (brokenFromFloors + backBroken) * 30;
+  // eggCount = Sağlamdaki en büyük rakam + (kolonlar kirli + kolonlar kırık) * 30
+  const eggCount = maxSolid + (dirtyFromFloors + brokenFromFloors) * 30;
 
   const avgWeight = parseAvgWeight(slip.bottomRight);
   const dateObj = parseDDMMYYYYToDate(slip.date);
