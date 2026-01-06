@@ -7,7 +7,10 @@ import JsonPanels from "./JsonPanels";
 import { useFlocks } from "./useFlocks";
 
 import type { ParsedSlip, Row, Cell, FirestoreDraft } from "./types";
-import { ensureAllLevels, deriveDaily } from "./utils";
+import { ensureAllLevels, deriveDaily, parseDDMMYYYYToDate, formatYYYYMMDD, todayMidnightLocal } from "./utils";
+
+import { db } from "@/lib/firebase";
+import { doc, setDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 
 export default function DailyEntryLLM() {
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -17,6 +20,9 @@ export default function DailyEntryLLM() {
   const [apiError, setApiError] = useState<string | null>(null);
 
   const [slip, setSlip] = useState<ParsedSlip | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
 
   const { loading: flocksLoading, flocks } = useFlocks();
   const [selectedFlockId, setSelectedFlockId] = useState<string>("");
@@ -105,6 +111,60 @@ export default function DailyEntryLLM() {
     });
   }
 
+  async function saveToFirestore() {
+    if (!slip || !derived || !draft) return;
+
+    setSaveErr(null);
+    setSaveMsg(null);
+
+    const coopId = slip.coop === "-" ? "" : slip.coop;
+    if (!coopId) {
+      setSaveErr("Kümes boş olamaz.");
+      return;
+    }
+    if (!selectedFlockId) {
+      setSaveErr("Flock seçilmedi.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // Tarih parse et - slip.date DD-MM-YYYY formatında
+      let dateObj = derived.dateObj;
+      if (!dateObj) {
+        // Parse edilemezse bugünü kullan
+        dateObj = todayMidnightLocal();
+      }
+
+      const dateTs = Timestamp.fromDate(dateObj);
+      const createdAt = serverTimestamp();
+      const dateYmd = formatYYYYMMDD(dateObj);
+      const docId = `${selectedFlockId}_${dateYmd}`;
+
+      const payload = {
+        coopId,
+        flockId: selectedFlockId,
+        eggCount: derived.eggCount,
+        dirtyEggCount: derived.dirtyEggCount,
+        brokenEggCount: derived.brokenEggCount,
+        avgWeight: derived.avgWeight ?? null,
+        mortality: mortality,
+        date: dateTs,
+        createdAt,
+        createdBy: "llm_entry",
+      };
+
+      await setDoc(doc(db, "daily_logs", docId), payload, { merge: true });
+
+      setSaveMsg("Kaydedildi ✅");
+      setTimeout(() => setSaveMsg(null), 3000);
+    } catch (e: any) {
+      setSaveErr(String(e?.message ?? e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <main className="mx-auto w-full max-w-5xl p-4 md:p-8 space-y-6">
       <DailyEntryUploader
@@ -152,7 +212,19 @@ export default function DailyEntryLLM() {
             slip={slip}
             onChange={(next) => setSlip(next)}
           />
-          <JsonPanels slip={slip} draft={draft} />
+          <JsonPanels 
+            slip={slip} 
+            draft={draft}
+            onSave={saveToFirestore}
+            saving={saving}
+            saveMsg={saveMsg}
+            saveErr={saveErr}
+            selectedFlockId={selectedFlockId}
+            onFlockChange={setSelectedFlockId}
+            flocks={flocks}
+            mortality={mortality}
+            onMortalityChange={setMortality}
+          />
         </section>
       ) : null}
     </main>
