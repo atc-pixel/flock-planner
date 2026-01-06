@@ -27,6 +27,48 @@ function stripJsonFences(s: string) {
     .trim();
 }
 
+/**
+ * iPhone'dan gelen data URL'i normalize eder.
+ * OpenAI Responses API'nin beklediği formata dönüştürür.
+ * Boşlukları ve yeni satırları temizler.
+ */
+function normalizeImageDataUrl(dataUrl: string): string {
+  if (!dataUrl || typeof dataUrl !== "string") {
+    throw new Error("Invalid imageDataUrl");
+  }
+
+  // Önce boşlukları ve yeni satırları temizle
+  let cleaned = dataUrl.trim().replace(/\s+/g, "");
+
+  // Data URL formatını parse et
+  if (cleaned.startsWith("data:image/")) {
+    // Format: data:image/<type>;base64,<base64_data>
+    const commaIndex = cleaned.indexOf(",");
+    if (commaIndex === -1) {
+      throw new Error("Invalid data URL format: missing comma");
+    }
+
+    const prefix = cleaned.substring(0, commaIndex + 1); // "data:image/jpeg;base64,"
+    const base64Data = cleaned.substring(commaIndex + 1);
+
+    // Base64 verisindeki boşlukları temizle (iPhone bazen ekleyebilir)
+    const cleanBase64 = base64Data.replace(/\s/g, "");
+
+    // Normalize edilmiş data URL'i döndür
+    return `${prefix}${cleanBase64}`;
+  }
+
+  // Eğer sadece base64 string ise, JPEG olarak varsay ve data URL formatına çevir
+  // (iPhone genellikle JPEG çeker)
+  if (!cleaned.includes(",") && !cleaned.includes(";")) {
+    const cleanBase64 = cleaned.replace(/\s/g, "");
+    return `data:image/jpeg;base64,${cleanBase64}`;
+  }
+
+  // Diğer durumlarda temizlenmiş halini döndür
+  return cleaned;
+}
+
 export async function POST(req: Request) {
   try {
     const { imageDataUrl } = (await req.json()) as { imageDataUrl?: string };
@@ -80,6 +122,9 @@ Rules:
 
     const userText = "Extract the table faithfully from the image into the JSON schema.";
 
+    // iPhone'dan gelen data URL'i normalize et
+    const normalizedImageUrl = normalizeImageDataUrl(imageDataUrl);
+
     // OpenAI Responses API
     const body = {
         model,
@@ -102,7 +147,7 @@ Rules:
                 },
                 {
                     type: "input_image",
-                    image_url: imageDataUrl,
+                    image_url: normalizedImageUrl,
                 },
             ],
         },
