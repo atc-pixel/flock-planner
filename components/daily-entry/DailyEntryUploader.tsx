@@ -15,7 +15,7 @@ type UploadError =
   | "NONE";
 
 const MAX_MB = 12;
-const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"];
 
 function formatBytes(bytes: number) {
   const mb = bytes / (1024 * 1024);
@@ -59,6 +59,32 @@ export default function DailyEntryUploader({
     });
   }
 
+  // Görseli mümkünse JPEG'e çevirerek OpenAI için uyumlu data URL üretir.
+  // HEIC veya desteklenmeyen türlerde dönüştürme başarısız olursa orijinal data URL'e düşer.
+  async function toJpegDataUrl(originalDataUrl: string): Promise<string> {
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = (err) => reject(err);
+        image.src = originalDataUrl;
+      });
+
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth || img.width;
+      canvas.height = img.naturalHeight || img.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("canvas_ctx_missing");
+
+      ctx.drawImage(img, 0, 0);
+      // 0.9 kalite: dosya boyutu/kalite dengesi
+      return canvas.toDataURL("image/jpeg", 0.9);
+    } catch {
+      // Dönüşüm başarısızsa orijinalini kullan
+      return originalDataUrl;
+    }
+  }
+
   async function handleFiles(files: FileList | null) {
     setErr("NONE");
     if (!files || files.length === 0) return;
@@ -80,9 +106,11 @@ export default function DailyEntryUploader({
 
     try {
       const url = await readAsDataURL(f);
+      const jpegUrl = await toJpegDataUrl(url);
+
       setFile(f);
-      setDataUrl(url);
-      onImageSelected?.(f, url);
+      setDataUrl(jpegUrl);
+      onImageSelected?.(f, jpegUrl);
     } catch {
       setErr("READ_FAILED");
     }
@@ -105,7 +133,7 @@ export default function DailyEntryUploader({
 
   const errorText =
     err === "UNSUPPORTED_TYPE"
-      ? "Sadece JPG / PNG / WEBP kabul ediliyor."
+      ? "Sadece JPG / PNG / WEBP / HEIC kabul ediliyor."
       : err === "FILE_TOO_LARGE"
       ? `Dosya çok büyük. Maksimum ${MAX_MB} MB.`
       : err === "READ_FAILED"

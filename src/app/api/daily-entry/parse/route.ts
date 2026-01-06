@@ -28,45 +28,49 @@ function stripJsonFences(s: string) {
 }
 
 /**
- * iPhone'dan gelen data URL'i normalize eder.
- * OpenAI Responses API'nin beklediği formata dönüştürür.
- * Boşlukları ve yeni satırları temizler.
+ * Her türlü image data URL'ini normalize eder.
+ * - Boşluk/newline temizler
+ * - MIME türü yoksa image/jpeg olarak ekler
+ * - ";base64," yoksa ekler
+ * - Base64 dışı karakterleri temizler
  */
 function normalizeImageDataUrl(dataUrl: string): string {
   if (!dataUrl || typeof dataUrl !== "string") {
     throw new Error("Invalid imageDataUrl");
   }
 
-  // Önce boşlukları ve yeni satırları temizle
+  // Boşluk ve newline temizle
   let cleaned = dataUrl.trim().replace(/\s+/g, "");
 
-  // Data URL formatını parse et
-  if (cleaned.startsWith("data:image/")) {
-    // Format: data:image/<type>;base64,<base64_data>
-    const commaIndex = cleaned.indexOf(",");
-    if (commaIndex === -1) {
-      throw new Error("Invalid data URL format: missing comma");
-    }
-
-    const prefix = cleaned.substring(0, commaIndex + 1); // "data:image/jpeg;base64,"
-    const base64Data = cleaned.substring(commaIndex + 1);
-
-    // Base64 verisindeki boşlukları temizle (iPhone bazen ekleyebilir)
-    const cleanBase64 = base64Data.replace(/\s/g, "");
-
-    // Normalize edilmiş data URL'i döndür
-    return `${prefix}${cleanBase64}`;
-  }
-
-  // Eğer sadece base64 string ise, JPEG olarak varsay ve data URL formatına çevir
-  // (iPhone genellikle JPEG çeker)
-  if (!cleaned.includes(",") && !cleaned.includes(";")) {
-    const cleanBase64 = cleaned.replace(/\s/g, "");
+  // Sadece base64 string geldiyse sar
+  if (!cleaned.startsWith("data:")) {
+    const cleanBase64 = cleaned.replace(/[^A-Za-z0-9+/=]/g, "");
     return `data:image/jpeg;base64,${cleanBase64}`;
   }
 
-  // Diğer durumlarda temizlenmiş halini döndür
-  return cleaned;
+  // data:... formatını parçala
+  // Örnek: data:image/jpeg;base64,<data>
+  const match = cleaned.match(/^data:([^;]+)?;?([^,]*),(.+)$/i);
+  if (!match) {
+    throw new Error("Invalid data URL format");
+  }
+
+  let mime = match[1] || "image/jpeg";
+  const encoding = match[2]?.toLowerCase() || "";
+  const payload = match[3] || "";
+
+  // Sadece image/* izin ver
+  if (!mime.startsWith("image/")) {
+    mime = "image/jpeg";
+  }
+
+  // base64 yoksa kabul etme (OpenAI Responses API base64 bekliyor)
+  const hasBase64 = encoding.includes("base64");
+
+  // Base64 dışı karakterleri temizle
+  const cleanBase64 = payload.replace(/[^A-Za-z0-9+/=]/g, "");
+
+  return `data:${mime};base64,${cleanBase64}`;
 }
 
 export async function POST(req: Request) {
@@ -88,7 +92,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+    const model = process.env.OPENAI_MODEL || "gpt-4o-latest";
 
     const system = `
 You read Turkish "YUMURTA SAYIM FİŞİ" photos and return ONLY valid JSON.
